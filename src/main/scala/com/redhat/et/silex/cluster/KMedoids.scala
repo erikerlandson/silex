@@ -20,9 +20,14 @@ package com.redhat.et.silex.cluster
 
 import scala.util.Random
 
+import scala.collection.parallel.ForkJoinTaskSupport
+import scala.concurrent.forkjoin.ForkJoinPool
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.Logging
 import org.apache.spark.util.random.XORShiftRandom
+
+import com.redhat.et.silex.util.parseq.implicits._
 
 class KMedoids[T] private (
   private var metric: (T, T) => Double,
@@ -31,6 +36,7 @@ class KMedoids[T] private (
   private var epsilon: Double,
   private var fractionEpsilon: Double,
   private var sampleSize: Int,
+  private var numThreads: Int,
   private var seed: Long) extends Serializable with Logging {
 
   def this(metric: (T, T) => Double) = this(
@@ -40,7 +46,10 @@ class KMedoids[T] private (
     KMedoids.default.epsilon,
     KMedoids.default.fractionEpsilon,
     KMedoids.default.sampleSize,
+    KMedoids.default.numThreads,
     KMedoids.default.seed)
+
+  var threadPool = new ForkJoinPool(numThreads)
 
   def medoidDist(e: T, mv: Seq[T]) = mv.iterator.map(metric(e, _)).min
   def medoidIdx(e: T, mv: Seq[T]) = mv.iterator.map(metric(e, _)).zipWithIndex.min._2
@@ -80,6 +89,13 @@ class KMedoids[T] private (
   def setSampleSize(sampleSize: Int): this.type = {
     require(sampleSize > 0, s"sampleSize= $sampleSize must be > 0")
     this.sampleSize = sampleSize
+    this
+  }
+
+  def setNumThreads(numTheads: Int): this.type = {
+    require(numThreads > 0, s"numThreads= $numThreads must be > 0")
+    this.numThreads = numThreads
+    threadPool = new ForkJoinPool(numThreads)
     this
   }
 
@@ -150,7 +166,8 @@ class KMedoids[T] private (
       val itrSeconds = (itrTime - itrStartTime) / 1e9
       logInfo(f"iteration $itr  cost= $currentCost%.6g  elapsed= $itrSeconds%.1f")
 
-      val next = data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1).map(_._2).map(medoid)
+      val next = data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1)
+        .map(_._2).par.withThreads(threadPool).map(medoid).seq
       val nextCost = modelCost(next, data)
 
       val curSeconds = (System.nanoTime - itrTime) / 1e9
@@ -196,6 +213,7 @@ object KMedoids extends Logging {
     def epsilon = 0.0
     def fractionEpsilon = 0.0001
     def sampleSize = 1000
+    def numThreads = 1
     def seed = scala.util.Random.nextLong()
   }
 
