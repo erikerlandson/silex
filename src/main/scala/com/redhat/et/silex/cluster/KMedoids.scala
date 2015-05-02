@@ -254,9 +254,13 @@ class KMedoids[T] private (
       val itrSeconds = (itrTime - itrStartTime) / 1e9
       logInfo(f"iteration $itr  cost= $currentCost%.6g  elapsed= $itrSeconds%.1f")
 
-      val next = data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1)
-        .map(_._2).par.withThreads(threadPool).map(medoid).seq
-      val nextCost = modelCost(next, data)
+      val g = KMedoids.benchmark("group clusters") {
+        data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1).map(_._2)
+      }
+      val next = KMedoids.benchmark("medoids") {
+        g.par.withThreads(threadPool).map(medoid).seq
+      }
+      val nextCost = KMedoids.benchmark("nextCost") { modelCost(next, data) }
 
       val curSeconds = (System.nanoTime - itrTime) / 1e9
       logInfo(f"updated cost= $nextCost%.6g  elapsed= $curSeconds%.1f sec")
@@ -437,4 +441,12 @@ object KMedoids extends Logging {
     */
   def sampleDistinct[T](data: Seq[T], k: Int): Seq[T] =
     sampleDistinct(data, k, scala.util.Random.nextLong())
+
+  def benchmark[T](label: String)(blk: => T) = {
+    val t0 = System.nanoTime
+    val t = blk
+    val sec = (System.nanoTime - t0) / 1e9
+    println(f"Run time for $label = $sec%.1f")
+    t
+  }
 }

@@ -166,6 +166,7 @@ class KMedoidsSpec extends FlatSpec with Matchers with PerTestSparkContext {
 
   scala.util.Random.setSeed(23571113)
 
+/*
   it should "sample RDD by size" in {
     val data = (0 until 1000).toVector
     val rdd = context.parallelize(data)
@@ -240,7 +241,7 @@ class KMedoidsSpec extends FlatSpec with Matchers with PerTestSparkContext {
     // different model with a different seed
     maxCenterDistance(model1.medoids, model3.medoids) should be > 0.0
   }
-
+*/
   it should "identify 5 clusters" in {
     val centers = List(
       Vector( 0.0,  0.0,  0.0),
@@ -249,14 +250,14 @@ class KMedoidsSpec extends FlatSpec with Matchers with PerTestSparkContext {
       Vector(-3.0,  3.0, -3.0),
       Vector( 3.0, -3.0,  3.0)
     )
-    val data = generateClusters(centers, 5000, seed=42)
+    val data = generateClusters(centers, 10000, seed=42)
     val km = new KMedoids(vectorAbs)
       .setK(5)
       .setSeed(73)
       .setFractionEpsilon(0.0)
-      .setSampleSize(5000)
+      .setSampleSize(10000)
       .setMaxIterations(20)
-      .setNumThreads(5)
+      .setNumThreads(1)
     val model = km.run(context.parallelize(data))
     model.k should be (5)
     maxCenterDistance(model.medoids, centers) should be < (0.25)
