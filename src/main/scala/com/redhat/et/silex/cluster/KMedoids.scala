@@ -29,6 +29,11 @@ import org.apache.spark.util.random.XORShiftRandom
 
 import com.redhat.et.silex.util.parseq.implicits._
 
+/** An object for training a K-Medoid clustering model on Seq or RDD data.
+  *
+  * Data is required to have a metric function defined on it, but it does not require an algebra
+  * over data elements, as K-Means clustering does.
+  */
 class KMedoids[T] private (
   private var metric: (T, T) => Double,
   private var k: Int,
@@ -39,6 +44,10 @@ class KMedoids[T] private (
   private var numThreads: Int,
   private var seed: Long) extends Serializable with Logging {
 
+  /** Constructs a KMedoids instance from a given metric function
+    *
+    * @param metric A metric function defined on data elements
+    */
   def this(metric: (T, T) => Double) = this(
     metric,
     KMedoids.default.k,
@@ -51,41 +60,102 @@ class KMedoids[T] private (
 
   var threadPool = new ForkJoinPool(numThreads)
 
-  def medoidDist(e: T, mv: Seq[T]) = mv.iterator.map(metric(e, _)).min
-  def medoidIdx(e: T, mv: Seq[T]) = mv.iterator.map(metric(e, _)).zipWithIndex.min._2
-  def medoidCost(e: T, data: Seq[T]) = data.iterator.map(metric(e, _)).sum
-  def medoid(data: Seq[T]) = data.iterator.minBy(medoidCost(_, data))
-  def modelCost(mv: Seq[T], data: Seq[T]) = data.iterator.map(medoidDist(_, mv)).sum
+  private def medoidDist(e: T, mv: Seq[T]) = {
+    val n = mv.length
+    var mMin = Double.MaxValue
+    var j = 0
+    while (j < n) {
+      val m = metric(e, mv(j))
+      if (m < mMin) { mMin = m }
+      j += 1
+    }
+    mMin
+  }
 
+  private def medoidIdx(e: T, mv: Seq[T]) = {
+    val n = mv.length
+    var mMin = Double.MaxValue
+    var jMin = 0
+    var j = 0
+    while (j < n) {
+      val m = metric(e, mv(j))
+      if (m < mMin) {
+        mMin = m
+        jMin = j
+      }
+      j += 1
+    }
+    jMin
+  }
+
+  private def medoidCost(e: T, data: Seq[T]) = data.iterator.map(metric(e, _)).sum
+  private def medoid(data: Seq[T]) = data.iterator.minBy(medoidCost(_, data))
+  private def modelCost(mv: Seq[T], data: Seq[T]) = data.iterator.map(medoidDist(_, mv)).sum
+
+  /** Set the distance metric to use over data elements
+    *
+    * @param metric The distance metric
+    * @return This instance after setting metric
+    */
   def setMetric(metric: (T, T) => Double): this.type = {
     this.metric = metric
     this
   }
 
+  /** Set the number of clusters to train
+    *
+    * @param k The number of clusters.  Must be > 0.
+    * @return This instance, after setting k
+    */
   def setK(k: Int): this.type = {
     require(k > 0, s"k= $k must be > 0")
     this.k = k
     this
   }
 
+  /** Set the maximum number of iterations to allow before halting cluster refinement.
+    *
+    * @param maxIterations The maximum number of refinement iterations.  Must be > 0.
+    * @return This instance, after setting maxIterations
+    */
   def setMaxIterations(maxIterations: Int): this.type = {
     require(maxIterations > 0, s"maxIterations= $maxIterations must be > 0")
     this.maxIterations = maxIterations
     this
   }
 
+  /** Set epsilon halting threshold for clustering cost improvement between refinements.
+    *
+    * If c1 is the current clustering model cost, and c0 is the cost of the previous model,
+    * then refinement halts when (c0 - c1) <= epsilon (Lower cost is better).
+    *
+    * @param epsilon The epsilon threshold to use.  Must be >= 0.
+    * @return This instance, after setting epsilon
+    */
   def setEpsilon(epsilon: Double): this.type = {
     require(epsilon >= 0.0, s"epsilon= $epsilon must be >= 0.0")
     this.epsilon = epsilon
     this
   }
 
+  /** Set fractionEpsilon threshold for clustering cost improvement between refinements.
+    *
+    * If c1 is the current clustering model cost, and c0 is the cost of the previous model,
+    * then refinement halts when (c0 - c1) / c0 <= fractionEpsilon (Lower cost is better).
+    * @param fractionEpsilon The fractionEpsilon threshold to use.  Must be >= 0.
+    * @return This instance, after setting fractionEpsilon
+    */
   def setFractionEpsilon(fractionEpsilon: Double): this.type = {
     require(fractionEpsilon >= 0.0, s"fractionEpsilon= $fractionEpsilon must be >= 0.0")
     this.fractionEpsilon = fractionEpsilon
     this
   }
 
+  /** Set the size of the random sample to take from input data to use for clustering.
+    *
+    * @param sampleSize The target size of the random sample.  Must be > 0.
+    * @return This instance, after setting sampleSize
+    */
   def setSampleSize(sampleSize: Int): this.type = {
     require(sampleSize > 0, s"sampleSize= $sampleSize must be > 0")
     this.sampleSize = sampleSize
@@ -99,11 +169,24 @@ class KMedoids[T] private (
     this
   }
 
+  /** Set the random number generation (RNG) seed.
+    *
+    * Cluster training runs with the same starting random seed will be the same.  By default,
+    * training runs will vary randomly.
+    *
+    * @param seed The random seed to use for RNG
+    * @return This instance, after setting seed
+    */
   def setSeed(seed: Long): this.type = {
     this.seed = seed
     this
   }
 
+  /** Perform a K-Medoid clustering model training run on some input data
+    *
+    * @param data The input data to train the clustering model on.
+    * @return A [[KMedoidsModel]] object representing the clustering model.
+    */
   def run(data: RDD[T]) = {
     val runStartTime = System.nanoTime
     val rng = new scala.util.Random(seed)
@@ -116,6 +199,11 @@ class KMedoids[T] private (
     model
   }
 
+  /** Perform a K-Medoid clustering model training run on some input data
+    *
+    * @param data The input data to train the clustering model on.
+    * @return A [[KMedoidsModel]] object representing the clustering model.
+    */
   def run(data: Seq[T]) = {
     val runStartTime = System.nanoTime
     val rng = new scala.util.Random(seed)
@@ -206,6 +294,7 @@ class KMedoids[T] private (
   }
 }
 
+/** Utilities used by K-Medoids clustering */
 object KMedoids extends Logging {
   private[cluster] object default {
     def k = 2
@@ -217,6 +306,14 @@ object KMedoids extends Logging {
     def seed = scala.util.Random.nextLong()
   }
 
+  /** Return the random sampling fraction corresponding to a desired number of samples
+    *
+    * @param n The size of data being sampled from
+    * @param sampleSize The desired sample size
+    * @return A sampling fraction, >= 0.0 and <= 1.0 that will yield the desired sample size
+    * @note When used with typical Bernoulli sampling the returned samping fraction will yield
+    * a sample size that varies randomly, with a mean of 'sampleSize'
+    */
   def sampleFraction[N :Numeric](n: N, sampleSize: Int): Double = {
     val num = implicitly[Numeric[N]]
     require(num.gteq(n, num.zero), "n must be >= 0")
@@ -231,6 +328,13 @@ object KMedoids extends Logging {
     }
   }
 
+  /** Return a random sample of data having an expected sample size of the requested amount.
+    *
+    * @param data The input data to sample
+    * @param sampleSize The desired sample size.
+    * @param seed Seed for RNG
+    * @return A sample whose expected mean size is sampleSize.
+    */
   def sampleBySize[T](data: RDD[T], sampleSize: Int, seed: Long): Seq[T] = {
     require(sampleSize >= 0, "sampleSize must be >= 0")
     val fraction = sampleFraction(data.count, sampleSize)
@@ -243,9 +347,22 @@ object KMedoids extends Logging {
     }
   }
 
+  /** Return a random sample of data having an expected sample size of the requested amount.
+    *
+    * @param data The input data to sample
+    * @param sampleSize The desired sample size.
+    * @return A sample whose expected mean size is sampleSize.
+    */
   def sampleBySize[T](data: RDD[T], sampleSize: Int): Seq[T] =
     sampleBySize(data, sampleSize, scala.util.Random.nextLong())
 
+  /** Return a random sample of data having an expected sample size of the requested amount.
+    *
+    * @param data The input data to sample
+    * @param sampleSize The desired sample size.
+    * @param seed Seed for RNG
+    * @return A sample whose expected mean size is sampleSize.
+    */
   def sampleBySize[T](data: Seq[T], sampleSize: Int, seed: Long): Seq[T] = {
     require(sampleSize >= 0, "sampleSize must be >= 0")
     val fraction = sampleFraction(data.length, sampleSize)
@@ -259,9 +376,23 @@ object KMedoids extends Logging {
     }
   }
 
+  /** Return a random sample of data having an expected sample size of the requested amount.
+    *
+    * @param data The input data to sample
+    * @param sampleSize The desired sample size.
+    * @return A sample whose expected mean size is sampleSize.
+    */
   def sampleBySize[T](data: Seq[T], sampleSize: Int): Seq[T] =
     sampleBySize(data, sampleSize, scala.util.Random.nextLong())
 
+  /** Return a given number of distinct elements randomly selected from data
+    *
+    * @param data The data to sample from
+    * @param k The number of distinct samples to return.
+    * @param rng Random number generator to use when sampling
+    * @return A collection of k distinct elements randomly selected from the data
+    * @note If the number of distinct elements in the data is < k, an exception will be thrown
+    */
   def sampleDistinct[T](data: Seq[T], k: Int, rng: scala.util.Random): Seq[T] = {
     require(k >= 0, "k must be >= 0")
     require(data.length >= k, s"data did not have >= $k distinct elements")
@@ -283,12 +414,27 @@ object KMedoids extends Logging {
       })
     }
     require(s.size == k, "logic error in sampleDistinct")
-    s.toSeq
+    s.toVector
   }
 
+  /** Return a given number of distinct elements randomly selected from data
+    *
+    * @param data The data to sample from
+    * @param k The number of distinct samples to return
+    * @param seed A seed to use for RNG when sampling
+    * @return A collection of k distinct elements randomly selected from the data
+    * @note If the number of distinct elements in the data is < k, an exception will be thrown
+    */
   def sampleDistinct[T](data: Seq[T], k: Int, seed: Long): Seq[T] = 
     sampleDistinct(data, k, new scala.util.Random(seed))
 
+  /** Return a given number of distinct elements randomly selected from data
+    *
+    * @param data The data to sample from
+    * @param k The number of distinct samples to return
+    * @return A collection of k distinct elements randomly selected from the data
+    * @note If the number of distinct elements in the data is < k, an exception will be thrown
+    */
   def sampleDistinct[T](data: Seq[T], k: Int): Seq[T] =
     sampleDistinct(data, k, scala.util.Random.nextLong())
 }
