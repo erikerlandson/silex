@@ -27,6 +27,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.Logging
 import org.apache.spark.util.random.XORShiftRandom
 
+import com.redhat.et.silex.util.parseq.IntensiveParVector
 import com.redhat.et.silex.util.parseq.implicits._
 
 /** An object for training a K-Medoid clustering model on Seq or RDD data.
@@ -258,7 +259,7 @@ class KMedoids[T] private (
         data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1).map(_._2)
       }
       val next = KMedoids.benchmark("medoids") {
-        g.par.withThreads(threadPool).map(medoid).seq
+        (new IntensiveParVector(g, numThreads)).withThreads(threadPool).map(medoid).seq
       }
       val nextCost = KMedoids.benchmark("nextCost") { modelCost(next, data) }
 
