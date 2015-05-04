@@ -90,7 +90,11 @@ class KMedoids[T] private (
   }
 
   private def medoidCost(e: T, data: Seq[T]) = data.iterator.map(metric(e, _)).sum
-  private def medoid(data: Seq[T]) = data.iterator.minBy(medoidCost(_, data))
+  private def medoid(data: Seq[T]) = {
+    KMedoids.benchmark(s"medoid: n= ${data.length}") {
+      data.iterator.minBy(medoidCost(_, data))
+    }
+  }
   private def modelCost(mv: Seq[T], data: Seq[T]) = data.iterator.map(medoidDist(_, mv)).sum
 
   /** Set the distance metric to use over data elements
@@ -163,10 +167,10 @@ class KMedoids[T] private (
     this
   }
 
-  def setNumThreads(numTheads: Int): this.type = {
+  def setNumThreads(numThreads: Int): this.type = {
     require(numThreads > 0, s"numThreads= $numThreads must be > 0")
     this.numThreads = numThreads
-    threadPool = new ForkJoinPool(numThreads)
+    this.threadPool = new ForkJoinPool(numThreads)
     this
   }
 
@@ -259,7 +263,12 @@ class KMedoids[T] private (
         data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1).map(_._2)
       }
       val next = KMedoids.benchmark("medoids") {
-        (new IntensiveParVector(g, numThreads)).withThreads(threadPool).map(medoid).seq
+        val b = scala.collection.mutable.ArrayBuffer.empty[T]
+        val pv = (new IntensiveParVector(g, numThreads)).withThreads(threadPool)
+        pv.foreach { e =>
+          b += medoid(e)
+        }
+        b.toVector
       }
       val nextCost = KMedoids.benchmark("nextCost") { modelCost(next, data) }
 
@@ -447,7 +456,7 @@ object KMedoids extends Logging {
     val t0 = System.nanoTime
     val t = blk
     val sec = (System.nanoTime - t0) / 1e9
-    println(f"Run time for $label = $sec%.1f")
+    println(f"Run time for $label = $sec%.1f"); System.out.flush
     t
   }
 }

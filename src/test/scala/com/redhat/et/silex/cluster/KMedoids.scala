@@ -250,7 +250,7 @@ class KMedoidsSpec extends FlatSpec with Matchers with PerTestSparkContext {
       Vector(-3.0,  3.0, -3.0),
       Vector( 3.0, -3.0,  3.0)
     )
-    val sz = 20000
+    val sz = 40000
     val data = generateClusters(centers, sz, seed=42)
     val km = new KMedoids(vectorAbs)
       .setK(5)
