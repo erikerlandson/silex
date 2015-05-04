@@ -258,7 +258,7 @@ class KMedoidsSpec extends FlatSpec with Matchers with PerTestSparkContext {
       .setFractionEpsilon(0.0)
       .setSampleSize(sz)
       .setMaxIterations(20)
-      .setNumThreads(5)
+      .setNumThreads(20)
     val model = km.run(context.parallelize(data))
     model.k should be (5)
     maxCenterDistance(model.medoids, centers) should be < (0.25)

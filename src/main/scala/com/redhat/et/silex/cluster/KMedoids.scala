@@ -92,7 +92,9 @@ class KMedoids[T] private (
   private def medoidCost(e: T, data: Seq[T]) = data.iterator.map(metric(e, _)).sum
   private def medoid(data: Seq[T]) = {
     KMedoids.benchmark(s"medoid: n= ${data.length}") {
-      data.iterator.minBy(medoidCost(_, data))
+      val pv = data.par
+      pv.tasksupport = new ForkJoinTaskSupport(threadPool)
+      pv.minBy(medoidCost(_, data))
     }
   }
   private def modelCost(mv: Seq[T], data: Seq[T]) = data.iterator.map(medoidDist(_, mv)).sum
@@ -263,12 +265,10 @@ class KMedoids[T] private (
         data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1).map(_._2)
       }
       val next = KMedoids.benchmark("medoids") {
-        val b = scala.collection.mutable.ArrayBuffer.empty[T]
-        val pv = (new IntensiveParVector(g, numThreads)).withThreads(threadPool)
-        pv.foreach { e =>
-          b += medoid(e)
-        }
-        b.toVector
+        //g.map(medoid)
+        val pv = (new IntensiveParVector(g, numThreads))
+        pv.tasksupport = new ForkJoinTaskSupport(threadPool)
+        pv.map(medoid).toVector
       }
       val nextCost = KMedoids.benchmark("nextCost") { modelCost(next, data) }
 
