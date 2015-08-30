@@ -8,12 +8,17 @@ val SPARK_VERSION = "1.4.0"
 
 scalaVersion := "2.10.4"
 
+resolvers += "Will's bintray" at "https://dl.bintray.com/willb/maven/"
+
 def commonSettings = Seq(
   libraryDependencies ++= Seq(
     "org.apache.spark" %% "spark-core" % SPARK_VERSION % "provided",
     "org.apache.spark" %% "spark-sql" % SPARK_VERSION % "provided",
     "org.apache.spark" %% "spark-mllib" % SPARK_VERSION % "provided",
     "org.apache.commons" % "commons-math3" % "3.5",
+    "io.continuum.bokeh" %% "bokeh" % "0.6",
+    "com.freevariable" %% "firkin" % "0.3.0",
+    "com.freevariable" %% "firkin-client" % "0.3.0",
     "joda-time" % "joda-time" % "2.7", 
     "org.joda" % "joda-convert" % "1.7",
     "org.scalatest" %% "scalatest" % "2.2.4" % Test,
