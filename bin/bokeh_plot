@@ -1,0 +1,24 @@
+#!/usr/bin/env python
+
+# run against a virtual-env installed-package path
+activate_this = '/home/eje/.bokeh-venv/bin/activate_this.py'
+execfile(activate_this, dict(__file__=activate_this))
+
+import sys
+import baker
+from bokeh.plotting import figure, output_file, show
+from bokeh.models.sources import AjaxDataSource
+
+@baker.command
+def line(tag, html, firkin='http://localhost:4091'):
+    "set up a line plot, listening for given tag on a firkin server"
+    sys.stderr.write("tag= %s  html= %s\n" % (tag, html))
+    output_file(html, title="bokeh line plot")
+    dataurl = firkin+"/tag/"+tag
+    sys.stderr.write("dataurl= %s\n" % (dataurl))
+    source = AjaxDataSource(data_url=dataurl, column_names=['x','y'], polling_interval=5000)
+    p = figure()
+    p.line(source=source, x='x', y='y', line_width=2, line_color='black')
+    show(p)
+
+baker.run()
