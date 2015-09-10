@@ -61,6 +61,9 @@ case class BNode[K, V](key: K, value: V, lnode: RBNode[K, V], rnode: RBNode[K, V
 }
 
 private object RBNode {
+  import scala.language.implicitConversions
+  implicit def fromRBMap[K, V](rbm: RBMap[K, V]): RBNode[K, V] = rbm.node
+
   def balance[K, V](node: RBNode[K, V])(implicit ord: Ordering[K]) = node match {
     case BNode(kG, vG, RNode(kP, vP, RNode(kC, vC, lC, rC), rP), rG) =>
       RNode(kP, vP, BNode(kC, vC, lC, rC), BNode(kG, vG, rP, rG))
@@ -81,11 +84,8 @@ class RBMap[K, V](val node: RBNode[K, V]) extends AnyVal {
 }
 
 object RBMap {
-  import scala.language.implicitConversions
-  implicit def toRBMap[K, V](node: RBNode[K, V]) = new RBMap(node)
-
-  def empty[K, V](implicit ord: Ordering[K]) = Leaf[K, V]() :RBMap[K, V]
+  def empty[K, V](implicit ord: Ordering[K]) = new RBMap(Leaf[K, V]())
 
   def apply[K, V](kv: (K, V)*)(implicit ord: Ordering[K]) =
-    kv.foldLeft(Leaf[K, V]() :RBNode[K, V])((m, e) => m + e) :RBMap[K, V]
+    new RBMap(kv.foldLeft(Leaf[K, V]() :RBNode[K, V])((m, e) => m + e))
 }
