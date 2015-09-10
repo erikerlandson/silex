@@ -31,7 +31,6 @@ sealed abstract class RBNode[K, V](implicit ord: Ordering[K]) {
   private[rbprefix] def ins(k: K, v: V): RBNode[K, V]
 }
 
-
 case class Leaf[K, V]()(implicit ord: Ordering[K]) extends RBNode[K, V] {
   def get(k: K) = None
 
@@ -77,9 +76,60 @@ private object RBNode {
   }
 }
 
+class RBNodeIterator[K, V](kv: (K, V), l: RBNode[K, V], r: RBNode[K, V]) extends Iterator[(K, V)] {
+  // At any point in time, only one iterator is stored, which is important because
+  // otherwise we'd instantiate all sub-iterators over the entire tree.  This way iterators
+  // get GC'd once they are spent, and only a linear stack is instantiated at any one time.
+  var state = RBNodeIterator.stateL
+  var itr = itrNext
+
+  def hasNext = itr.hasNext
+
+  def next = {
+    val v = itr.next
+    if (!itr.hasNext) itr = itrNext
+    v
+  }
+
+  // Get the next non-empty iterator if it exists, or an empty iterator otherwise
+  // Adhere to in-order state transition: left-subtree -> current -> right-subtree 
+  def itrNext = {
+    var n = itrState
+    while (!n.hasNext && state < RBNodeIterator.stateR) n = itrState
+    n
+  }
+
+  // Get the iterator corresponding to next iteration state
+  def itrState = {
+    val i = state match {
+      case RBNodeIterator.stateL => RBNodeIterator(l)    // left subtree
+      case RBNodeIterator.stateC => Iterator.single(kv)  // current node
+      case RBNodeIterator.stateR => RBNodeIterator(r)    // right subtree
+      case _ => Iterator.empty
+    }
+    state += 1
+    i
+  }
+}
+
+private object RBNodeIterator {
+  // Iteration states corresponding to in-order tree traversal 
+  val stateL = 1  // iterating over left subtree
+  val stateC = 2  // current node
+  val stateR = 3  // iterating over right subtree
+
+  // Given a node, create an iterator over it and its sub-trees
+  def apply[K, V](node: RBNode[K, V]) = node match {
+    case Leaf() => Iterator.empty
+    case n: RNode[K, V] => new RBNodeIterator(((n.key, n.value)), n.lnode, n.rnode)
+    case n: BNode[K, V] => new RBNodeIterator(((n.key, n.value)), n.lnode, n.rnode)
+  }
+}
+
 class RBMap[K, V](val node: RBNode[K, V]) extends AnyVal {
   def +(kv: (K, V)) = new RBMap(node + kv)
   def get(k: K) = node.get(k)
+  def iterator = RBNodeIterator(node)
   override def toString = node.toString
 }
 
