@@ -57,9 +57,11 @@ sealed abstract class RBNode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[
 
   def get(k: K): Option[V]
   final def prefixSum(k: K, open: Boolean = false) = pfSum(k, pim.zero, open)
+  final def prefixSumVal(k: K, open: Boolean = false) = pfSV(k, pim.zero, open)
 
   // internal
-  def pfSum(k: K, sum: P, open: Boolean): P 
+  def pfSum(k: K, sum: P, open: Boolean): P
+  def pfSV(k: K, sum: P, open: Boolean): (P, Option[V])
   private[rbprefix] def ins(k: K, v: V): RBNode[K, V, P]
   def ppv: P
 }
@@ -68,6 +70,7 @@ case class Leaf[K, V, P]()(implicit ord: Ordering[K], vsg: Semigroup[V], pim: In
   def get(k: K) = None
 
   def pfSum(k: K, sum: P, open: Boolean) = sum
+  def pfSV(k: K, sum: P, open: Boolean) = (sum, None)
   private[rbprefix] def ins(k: K, v: V) = RNode(k, v, pim.zero, this, this)
   def ppv = pim.zero
 }
@@ -79,6 +82,8 @@ case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
 
   def pfSum(k: K, sum: P, open: Boolean) =
     if (ord.lt(k, key)) lnode.pfSum(k, sum, open) else if (ord.gt(k, key)) rnode.pfSum(k, pim.plus(sum, ppv), open) else if (open) pim.plus(sum, prefix) else pim.plus(sum, ppv)
+  def pfSV(k: K, sum: P, open: Boolean) =
+    if (ord.lt(k, key)) lnode.pfSV(k, sum, open) else if (ord.gt(k, key)) rnode.pfSV(k, pim.plus(sum, ppv), open) else if (open) (pim.plus(sum, prefix), Some(value)) else (pim.plus(sum, ppv), Some(value))
 
   private[rbprefix] def ins(k: K, v: V) =
     if (ord.lt(k, key)) RNode(key, value, pim.inc(prefix, v), lnode.ins(k, v), rnode)
@@ -95,6 +100,8 @@ case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
 
   def pfSum(k: K, sum: P, open: Boolean) =
     if (ord.lt(k, key)) lnode.pfSum(k, sum, open) else if (ord.gt(k, key)) rnode.pfSum(k, pim.plus(sum, ppv), open) else if (open) pim.plus(sum, prefix) else pim.plus(sum, ppv)
+  def pfSV(k: K, sum: P, open: Boolean) =
+    if (ord.lt(k, key)) lnode.pfSV(k, sum, open) else if (ord.gt(k, key)) rnode.pfSV(k, pim.plus(sum, ppv), open) else if (open) (pim.plus(sum, prefix), Some(value)) else (pim.plus(sum, ppv), Some(value))
 
   private[rbprefix] def ins(k: K, v: V) =
     if (ord.lt(k, key)) RBNode.balance(BNode(key, value, pim.inc(prefix, v), lnode.ins(k, v), rnode))
