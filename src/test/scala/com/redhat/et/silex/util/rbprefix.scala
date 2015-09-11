@@ -22,6 +22,7 @@ import org.scalatest._
 
 import com.redhat.et.silex.testing.matchers._
 
+/*
 object RBNodeProperties extends FlatSpec with Matchers {
   trait Color
   case object Red extends Color
@@ -130,3 +131,5 @@ class RBMapSpec extends FlatSpec with Matchers {
     }
   }
 }
+
+*/

@@ -20,62 +20,82 @@ package com.redhat.et.silex.util.rbprefix
 
 import math.Ordering
 
-sealed abstract class RBNode[K, V](implicit ord: Ordering[K]) {
+sealed abstract class RBNode[K, V, P](implicit zero: P, rollupOp: (P, V) => P, prefixOp: (P, P) => P, ord: Ordering[K]) {
   final def +(kv: (K, V)) = ins(kv._1, kv._2) match {
-    case RNode(k, v, l, r) => BNode(k, v, l, r)
+    case RNode(k, v, p, l, r) => BNode(k, v, p, l, r)
     case n => n
   }
 
   def get(k: K): Option[V]
+  final def getPrefix(k: K) = getPre(k, zero)
 
-  private[rbprefix] def ins(k: K, v: V): RBNode[K, V]
+  // internal
+  def getPre(k: K, preSum: P): P 
+  private[rbprefix] def ins(k: K, v: V): RBNode[K, V, P]
+  def ppv: P
 }
 
-case class Leaf[K, V]()(implicit ord: Ordering[K]) extends RBNode[K, V] {
+case class Leaf[K, V, P]()(implicit zero: P, rollupOp: (P, V) => P, prefixOp: (P, P) => P, ord: Ordering[K]) extends RBNode[K, V, P] {
   def get(k: K) = None
 
-  private[rbprefix] def ins(k: K, v: V) = RNode(k, v, this, this)
+  def getPre(k: K, preSum: P) = preSum
+  private[rbprefix] def ins(k: K, v: V) = RNode(k, v, zero, this, this)
+  def ppv = zero
 }
 
-case class RNode[K, V](key: K, value: V, lnode: RBNode[K, V], rnode: RBNode[K, V])
-    (implicit ord: Ordering[K]) extends RBNode[K, V] {
+case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])
+    (implicit zero: P, rollupOp: (P, V) => P, prefixOp: (P, P) => P, ord: Ordering[K]) extends RBNode[K, V, P] {
   def get(k: K) =
     if (ord.lt(k, key)) lnode.get(k) else if (ord.gt(k, key)) rnode.get(k) else Some(value)
 
+  def getPre(k: K, preSum: P) =
+    if (ord.lt(k, key)) lnode.getPre(k, preSum) else if (ord.gt(k, key)) rnode.getPre(k, prefixOp(preSum, rollupOp(prefix, value))) else prefixOp(preSum, prefix)
+
   private[rbprefix] def ins(k: K, v: V) =
-    if (ord.lt(k, key)) RNode(key, value, lnode.ins(k, v), rnode)
-    else if (ord.gt(k, key)) RNode(key, value, lnode, rnode.ins(k, v))
-    else RNode(key, v, lnode, rnode)
+    if (ord.lt(k, key)) RNode(key, value, rollupOp(prefix, v), lnode.ins(k, v), rnode)
+    else if (ord.gt(k, key)) RNode(key, value, prefix, lnode, rnode.ins(k, v))
+    else RNode(key, v, prefix, lnode, rnode)
+
+  def ppv = rollupOp(prefix, value)
 }
 
-case class BNode[K, V](key: K, value: V, lnode: RBNode[K, V], rnode: RBNode[K, V])
-    (implicit ord: Ordering[K]) extends RBNode[K, V] {
+case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])
+    (implicit zero: P, rollupOp: (P, V) => P, prefixOp: (P, P) => P, ord: Ordering[K]) extends RBNode[K, V, P] {
   def get(k: K) =
     if (ord.lt(k, key)) lnode.get(k) else if (ord.gt(k, key)) rnode.get(k) else Some(value)
 
+  def getPre(k: K, preSum: P) =
+    if (ord.lt(k, key)) lnode.getPre(k, preSum) else if (ord.gt(k, key)) rnode.getPre(k, prefixOp(preSum, rollupOp(prefix, value))) else prefixOp(preSum, prefix)
+
   private[rbprefix] def ins(k: K, v: V) =
-    if (ord.lt(k, key)) RBNode.balance(BNode(key, value, lnode.ins(k, v), rnode))
-    else if (ord.gt(k, key)) RBNode.balance(BNode(key, value, lnode, rnode.ins(k, v)))
-    else BNode(key, v, lnode, rnode)
+    if (ord.lt(k, key)) RBNode.balance(BNode(key, value, rollupOp(prefix, v), lnode.ins(k, v), rnode))
+    else if (ord.gt(k, key)) RBNode.balance(BNode(key, value, prefix, lnode, rnode.ins(k, v)))
+    else BNode(key, v, prefix, lnode, rnode)
+
+  def ppv = rollupOp(prefix, value)
 }
 
-private object RBNode {
+object RBNode {
   import scala.language.implicitConversions
-  implicit def fromRBMap[K, V](rbm: RBMap[K, V]): RBNode[K, V] = rbm.node
+  //implicit def fromRBMap[K, V](rbm: RBMap[K, V]): RBNode[K, V] = rbm.node
 
-  def balance[K, V](node: RBNode[K, V])(implicit ord: Ordering[K]) = node match {
-    case BNode(kG, vG, RNode(kP, vP, RNode(kC, vC, lC, rC), rP), rG) =>
-      RNode(kP, vP, BNode(kC, vC, lC, rC), BNode(kG, vG, rP, rG))
-    case BNode(kG, vG, RNode(kP, vP, lP, RNode(kC, vC, lC, rC)), rG) =>
-      RNode(kC, vC, BNode(kP, vP, lP, lC), BNode(kG, vG, rC, rG))
-    case BNode(kG, vG, lG, RNode(kP, vP, RNode(kC, vC, lC, rC), rP)) =>
-      RNode(kC, vC, BNode(kG, vG, lG, lC), BNode(kP, vP, rC, rP))
-    case BNode(kG, vG, lG, RNode(kP, vP, lP, RNode(kC, vC, lC, rC))) =>
-      RNode(kP, vP, BNode(kG, vG, lG, lP), BNode(kC, vC, lC, rC))
+  def balance[K, V, P](node: RBNode[K, V, P])(implicit zero: P, rollupOp: (P, V) => P, prefixOp: (P, P) => P, ord: Ordering[K]) = node match {
+    case BNode(kG, vG, pG, RNode(kP, vP, pP, RNode(kC, vC, pC, lC, rC), rP), rG) => RNode(kP, vP, rollupOp(pC, vC), BNode(kC, vC, pC, lC, rC), BNode(kG, vG, rP.ppv, rP, rG))
+    case BNode(kG, vG, pG, RNode(kP, vP, pP, lP, RNode(kC, vC, pC, lC, rC)), rG) => RNode(kC, vC, rollupOp(pP, vP), BNode(kP, vP, pP, lP, lC), BNode(kG, vG, rC.ppv, rC, rG))
+    case BNode(kG, vG, pG, lG, RNode(kP, vP, pP, RNode(kC, vC, pC, lC, rC), rP)) => RNode(kC, vC, rollupOp(pG, vG), BNode(kG, vG, pG, lG, lC), BNode(kP, vP, rC.ppv, rC, rP))
+    case BNode(kG, vG, pG, lG, RNode(kP, vP, pP, lP, RNode(kC, vC, pC, lC, rC))) => RNode(kP, vP, rollupOp(pG, vG), BNode(kG, vG, pG, lG, lP), BNode(kC, vC, pC, lC, rC))
     case _ => node
   }
+
+  def empty[K, V, P](z: P)(rollupOp: (P, V) => P, prefixOp: (P, P) => P)(implicit ord: Ordering[K]): RBNode[K, V, P] = Leaf[K, V, P]()(z, rollupOp, prefixOp, ord)
+
+/*
+  def apply[K, V, P](kv: (K, V)*)(implicit ord: Ordering[K]) =
+    new RBMap(kv.foldLeft(Leaf[K, V]() :RBNode[K, V])((m, e) => m + e))
+*/
 }
 
+/*
 class RBNodeIterator[K, V](kv: (K, V), l: RBNode[K, V], r: RBNode[K, V]) extends Iterator[(K, V)] {
   // At any point in time, only one iterator is stored, which is important because
   // otherwise we'd instantiate all sub-iterators over the entire tree.  This way iterators
@@ -139,3 +159,5 @@ object RBMap {
   def apply[K, V](kv: (K, V)*)(implicit ord: Ordering[K]) =
     new RBMap(kv.foldLeft(Leaf[K, V]() :RBNode[K, V])((m, e) => m + e))
 }
+
+*/
