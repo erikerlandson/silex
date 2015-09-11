@@ -50,19 +50,21 @@ object IncrementingMonoid {
 }
 
 sealed abstract class RBNode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) {
-  final def +(kv: (K, V)) = ins(kv._1, kv._2) match {
-    case RNode(k, v, p, l, r) => BNode(k, v, p, l, r)
-    case n => n
-  }
+  final def +(kv: (K, V)) = RBNode.blacken(ins(kv._1, kv._2))
+  final def insert(k: K, v: V) = RBNode.blacken(ins(k, v))
 
   def get(k: K): Option[V]
+
+  final def increment(k: K, v: V) = inc(k, v)
+
   final def prefixSum(k: K, open: Boolean = false) = pfSum(k, pim.zero, open)
   final def prefixSumVal(k: K, open: Boolean = false) = pfSV(k, pim.zero, open)
 
   // internal
   def pfSum(k: K, sum: P, open: Boolean): P
   def pfSV(k: K, sum: P, open: Boolean): (P, Option[V])
-  private[rbprefix] def ins(k: K, v: V): RBNode[K, V, P]
+  def ins(k: K, v: V): RBNode[K, V, P]
+  def inc(k: K, v: V): RBNode[K, V, P]
   def ppv: P
 }
 
@@ -71,7 +73,8 @@ case class Leaf[K, V, P]()(implicit ord: Ordering[K], vsg: Semigroup[V], pim: In
 
   def pfSum(k: K, sum: P, open: Boolean) = sum
   def pfSV(k: K, sum: P, open: Boolean) = (sum, None)
-  private[rbprefix] def ins(k: K, v: V) = RNode(k, v, pim.zero, this, this)
+  def ins(k: K, v: V) = RNode(k, v, pim.zero, this, this)
+  def inc(k: K, v: V) = RNode(k, v, pim.zero, this, this)
   def ppv = pim.zero
 }
 
@@ -85,10 +88,21 @@ case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
   def pfSV(k: K, sum: P, open: Boolean) =
     if (ord.lt(k, key)) lnode.pfSV(k, sum, open) else if (ord.gt(k, key)) rnode.pfSV(k, pim.plus(sum, ppv), open) else if (open) (pim.plus(sum, prefix), Some(value)) else (pim.plus(sum, ppv), Some(value))
 
-  private[rbprefix] def ins(k: K, v: V) =
-    if (ord.lt(k, key)) RNode(key, value, pim.inc(prefix, v), lnode.ins(k, v), rnode)
+  def ins(k: K, v: V) =
+    if (ord.lt(k, key)) {
+      val lnew = lnode.ins(k, v)
+      RNode(key, value, lnew.ppv, lnew, rnode)
+    }
     else if (ord.gt(k, key)) RNode(key, value, prefix, lnode, rnode.ins(k, v))
     else RNode(key, v, prefix, lnode, rnode)
+
+  def inc(k: K, v: V) =
+    if (ord.lt(k, key)) {
+      val lnew = lnode.inc(k, v)
+      RNode(key, value, lnew.ppv, lnew, rnode)
+    }
+    else if (ord.gt(k, key)) RNode(key, value, prefix, lnode, rnode.inc(k, v))
+    else RNode(key, vsg.plus(value, v), prefix, lnode, rnode)
 
   def ppv = pim.inc(prefix, value)
 }
@@ -103,10 +117,21 @@ case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
   def pfSV(k: K, sum: P, open: Boolean) =
     if (ord.lt(k, key)) lnode.pfSV(k, sum, open) else if (ord.gt(k, key)) rnode.pfSV(k, pim.plus(sum, ppv), open) else if (open) (pim.plus(sum, prefix), Some(value)) else (pim.plus(sum, ppv), Some(value))
 
-  private[rbprefix] def ins(k: K, v: V) =
-    if (ord.lt(k, key)) RBNode.balance(BNode(key, value, pim.inc(prefix, v), lnode.ins(k, v), rnode))
+  def ins(k: K, v: V) =
+    if (ord.lt(k, key)) {
+      val lnew = lnode.ins(k, v)
+      RBNode.balance(BNode(key, value, lnew.ppv, lnew, rnode))
+    }
     else if (ord.gt(k, key)) RBNode.balance(BNode(key, value, prefix, lnode, rnode.ins(k, v)))
     else BNode(key, v, prefix, lnode, rnode)
+
+  def inc(k: K, v: V) =
+    if (ord.lt(k, key)) {
+      val lnew = lnode.inc(k, v)
+      RBNode.balance(BNode(key, value, lnew.ppv, lnew, rnode))
+    }
+    else if (ord.gt(k, key)) RBNode.balance(BNode(key, value, prefix, lnode, rnode.inc(k, v)))
+    else BNode(key, vsg.plus(value, v), prefix, lnode, rnode)
 
   def ppv = pim.inc(prefix, value)
 }
@@ -114,6 +139,11 @@ case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
 object RBNode {
   import scala.language.implicitConversions
   //implicit def fromRBMap[K, V](rbm: RBMap[K, V]): RBNode[K, V] = rbm.node
+
+  def blacken[K, V, P](node: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) = node match {
+    case RNode(k, v, p, l, r) => BNode(k, v, p, l, r)
+    case n => n
+  }
 
   def balance[K, V, P](node: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) = node match {
     case BNode(kG, vG, pG, RNode(kP, vP, pP, RNode(kC, vC, pC, lC, rC), rP), rG) => RNode(kP, vP, pim.inc(pC, vC), BNode(kC, vC, pC, lC, rC), BNode(kG, vG, rP.ppv, rP, rG))
@@ -123,7 +153,8 @@ object RBNode {
     case _ => node
   }
 
-  def empty[K, V](implicit ord: Ordering[K], mon: Monoid[V]): RBNode[K, V, V] = Leaf[K, V, V]()(ord, mon, IncrementingMonoid.fromMonoid(mon))
+  def apply[K, V, P](vsg: Semigroup[V], pim: IncrementingMonoid[P, V])(implicit ord: Ordering[K]): RBNode[K, V, P] =
+    Leaf[K, V, P]()(ord, vsg, pim)
 
 /*
   def apply[K, V, P](kv: (K, V)*)(implicit ord: Ordering[K]) =
