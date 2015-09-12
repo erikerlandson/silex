@@ -20,72 +20,73 @@ package com.redhat.et.silex.util.rbprefix
 
 import org.scalatest._
 
+import com.twitter.algebird.{ Semigroup, Monoid, MonoidAggregator }
+
 import com.redhat.et.silex.testing.matchers._
 
-/*
 object RBNodeProperties extends FlatSpec with Matchers {
   trait Color
   case object Red extends Color
   case object Black extends Color
 
-  def color[K, V](node: RBNode[K, V]): Color = node match {
-    case n: RNode[K, V] => Red
+  def color[K, V, P](node: RBNode[K, V, P]): Color = node match {
+    case n: RNode[K, V, P] => Red
     case _ => Black
   }
 
-  def blackHeight[K, V](node: RBNode[K, V]): Set[Int] = node match {
+  def blackHeight[K, V, P](node: RBNode[K, V, P]): Set[Int] = node match {
     case Leaf() => Set(1)
-    case RNode(_, _, lnode, rnode) => blackHeight(lnode) ++ blackHeight(rnode)
-    case BNode(_, _, lnode, rnode) => (blackHeight(lnode) ++ blackHeight(rnode)).map(_ + 1)
+    case RNode(_, _, _, lnode, rnode) => blackHeight(lnode) ++ blackHeight(rnode)
+    case BNode(_, _, _, lnode, rnode) => (blackHeight(lnode) ++ blackHeight(rnode)).map(_ + 1)
   }
 
-  def testBlackHeight[K, V](node: RBNode[K, V]): Boolean = node match {
+  def testBlackHeight[K, V, P](node: RBNode[K, V, P]): Boolean = node match {
     case Leaf() => true
 
-    case RNode(_, _, lnode, rnode) =>
+    case RNode(_, _, _, lnode, rnode) =>
       testBlackHeight(lnode) && testBlackHeight(rnode) &&
       (blackHeight(lnode) == blackHeight(rnode)) && (blackHeight(lnode).size == 1)
       
-    case BNode(_, _, lnode, rnode) =>
+    case BNode(_, _, _, lnode, rnode) =>
       testBlackHeight(lnode) && testBlackHeight(rnode) &&
       (blackHeight(lnode) == blackHeight(rnode)) && (blackHeight(lnode).size == 1)
   }
 
-  def testRedChildrenBlack[K, V](node: RBNode[K, V]): Boolean = node match {
+  def testRedChildrenBlack[K, V, P](node: RBNode[K, V, P]): Boolean = node match {
     case Leaf() => true
-    case n: RNode[K, V] => color(n.lnode) == Black && color(n.rnode) == Black &&
+    case n: RNode[K, V, P] => color(n.lnode) == Black && color(n.rnode) == Black &&
       testRedChildrenBlack(n.lnode) && testRedChildrenBlack(n.rnode)
-    case n: BNode[K, V] => testRedChildrenBlack(n.lnode) && testRedChildrenBlack(n.rnode)
+    case n: BNode[K, V, P] => testRedChildrenBlack(n.lnode) && testRedChildrenBlack(n.rnode)
   }
 
-  def balance[K, V](node: RBNode[K, V]): (Int, Int) = node match {
+  def balance[K, V, P](node: RBNode[K, V, P]): (Int, Int) = node match {
     case Leaf() => (0, 0)
-    case n: RNode[K, V] => {
+    case n: RNode[K, V, P] => {
       val (lmin, lmax) = balance(n.lnode)
       val (rmin, rmax) = balance(n.rnode)
       (1 + math.min(lmin, rmin), 1 + math.max(lmax, rmax))
     }
-    case n: BNode[K, V] => {
+    case n: BNode[K, V, P] => {
       val (lmin, lmax) = balance(n.lnode)
       val (rmin, rmax) = balance(n.rnode)
       (1 + math.min(lmin, rmin), 1 + math.max(lmax, rmax))
     }
   }
 
-  def testBalance[K, V](node: RBNode[K, V]): Boolean = node match {
+  def testBalance[K, V, P](node: RBNode[K, V, P]): Boolean = node match {
     case Leaf() => true
-    case n: RNode[K, V] => {
+    case n: RNode[K, V, P] => {
       val (pmin, pmax) = balance(node)
       (pmax <= (2 * pmin)) && testBalance(n.lnode) && testBalance(n.rnode)
     }
-    case n: BNode[K, V] => {
+    case n: BNode[K, V, P] => {
       val (pmin, pmax) = balance(node)
       (pmax <= (2 * pmin)) && testBalance(n.lnode) && testBalance(n.rnode)
     }
   }
 
   // test RB tree invariant properties related to RB construction
-  def testRB[K, V](root: RBNode[K, V]) = {
+  def testRB[K, V, P](root: RBNode[K, V, P]) = {
     // The root node of a RB tree should be black
     color(root) should be (Black)
 
@@ -98,27 +99,28 @@ object RBNodeProperties extends FlatSpec with Matchers {
     // Depth of deepest node should be <= twice the depth of shallowest
     testBalance(root) should be (true)
   }
+
+  // Int keys, values and prefixes, using standard integer addition
+  def mapType1 = PrefixTreeMap[Int, Int, Int](implicitly[Semigroup[Int]],IncrementingMonoid.fromMonoid(implicitly[Monoid[Int]]))
 }
 
 
-class RBMapSpec extends FlatSpec with Matchers {
+class PrefixTreeMapSpec extends FlatSpec with Matchers {
   import RBNodeProperties._
 
   it should "have valid empty object" in {
-    testRB(RBMap.empty[String, Int])
-    testRB(RBMap.empty[Int, Char])
+    testRB(mapType1)
   }
 
   it should "insert initial node" in {
-    testRB(RBMap.empty[String, Int] + (("a", 1)))
-    testRB(RBMap.empty[Int, Char] + ((1, 'a')))
+    testRB(mapType1 + ((1, 3)))
   }
 
   it should "build from data" in {
-    val data = Vector.tabulate(100)(j => (j, j.toString))
+    val data = Vector.tabulate(100)(j => (j, j))
     (1 to 1000).foreach { u =>
       val shuffled = scala.util.Random.shuffle(data)
-      val rbmap = RBMap(shuffled:_*)
+      val rbmap = shuffled.foldLeft(mapType1)((m, e) => m + e)
 
       // verify R/B tree construction invariants
       testRB(rbmap)
@@ -131,5 +133,3 @@ class RBMapSpec extends FlatSpec with Matchers {
     }
   }
 }
-
-*/

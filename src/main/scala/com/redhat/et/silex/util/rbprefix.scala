@@ -156,7 +156,7 @@ case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
 
 object RBNode {
   import scala.language.implicitConversions
-  //implicit def fromRBMap[K, V](rbm: RBMap[K, V]): RBNode[K, V] = rbm.node
+  implicit def fromPrefixTreeMap[K, V, P](rbm: PrefixTreeMap[K, V, P]): RBNode[K, V, P] = rbm.node
 
   def blacken[K, V, P](node: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) = node match {
     case RNode(k, v, p, l, r) => BNode(k, v, p, l, r)
