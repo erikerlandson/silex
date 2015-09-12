@@ -166,7 +166,7 @@ object RBNode {
   }
 
   def balanceDel[K, V, P](x: K, xv: V, tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
-    case (RNode(y, yv, yp, a, b), RNode(z, zv, zp, c, d)) => RNode(x, xv, pim.inc(yp, yv), BNode(y, yv, yp, a, b), BNode(z, zv, c.ppv, c, d))
+    case (RNode(y, yv, yp, a, b), RNode(z, zv, zp, c, d)) => RNode(x, xv, pim.inc(yp, yv), BNode(y, yv, yp, a, b), BNode(z, zv, zp, c, d))
     case (RNode(y, yv, yp, RNode(z, zv, zp, a, b), c), d) => RNode(y, yv, pim.inc(zp, zv), BNode(z, zv, zp, a, b), BNode(x, xv, c.ppv, c, d))
     case (RNode(y, yv, yp, a, RNode(z, zv, zp, b, c)), d) => RNode(z, zv, pim.inc(yp, yv), BNode(y, yv, yp, a, b), BNode(x, xv, c.ppv, c, d))
     case (a, RNode(y, yv, yp, b, RNode(z, zv, zp, c, d))) => RNode(y, yv, pim.inc(a.ppv, xv), BNode(x, xv, a.ppv, a, b), BNode(z, zv, zp, c, d))
@@ -175,8 +175,8 @@ object RBNode {
   }
 
   def balanceLeft[K, V, P](x: K, xv: V, tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
-    case (RNode(y, yv, yp, a, b), c) => RNode(x, xv, pim.inc(a.ppv, yv), BNode(y, yv, a.ppv, a, b), c)
-    case (bl, BNode(y, yv, yp, a, b)) => balanceDel(x, xv, bl, RNode(y, yv, a.ppv, a, b))
+    case (RNode(y, yv, yp, a, b), c) => RNode(x, xv, pim.inc(yp, yv), BNode(y, yv, yp, a, b), c)
+    case (bl, BNode(y, yv, yp, a, b)) => balanceDel(x, xv, bl, RNode(y, yv, yp, a, b))
     case (bl, RNode(y, yv, yp, BNode(z, zv, zp, a, b), c)) => RNode(z, zv, pim.inc(bl.ppv, xv), BNode(x, xv, bl.ppv, bl, a), balanceDel(y, yv, b, redden(c)))
     case _ => Leaf()
   }
@@ -196,7 +196,7 @@ object RBNode {
     case (n, Leaf()) => n
     case (RNode(x, xv, xp, a, b), RNode(y, yv, yp, c, d)) => append(b, c) match {
       case RNode(z, zv, zp, bb, cc) => RNode(z, zv, pim.inc(xp, xv), RNode(x, xv, xp, a, bb), RNode(y, yv, cc.ppv, cc, d))
-      case bc => RNode(x, xv, xp, a, RNode(y, yv, yp, c, d))
+      case bc => RNode(x, xv, xp, a, RNode(y, yv, bc.ppv, bc, d))
     }
     case (BNode(x, xv, xp, a, b), BNode(y, yv, yp, c, d)) => append(b, c) match {
       case RNode(z, zv, zp, bb, cc) => RNode(z, zv, pim.inc(xp, xv), BNode(x, xv, xp, a, bb), BNode(y, yv, cc.ppv, cc, d))
@@ -299,39 +299,27 @@ object RBMap {
 84	    // http://www.cse.unsw.edu.au/~dons/data/RedBlackTree.html
 85	    def del(k: A): Tree[B] = {
 86	      def balance(x: A, xv: B, tl: Tree[B], tr: Tree[B]) = (tl, tr) match {
-87	        case (RedTree(y, yv, a, b), RedTree(z, zv, c, d)) =>
-88	          RedTree(x, xv, BlackTree(y, yv, a, b), BlackTree(z, zv, c, d))
-89	        case (RedTree(y, yv, RedTree(z, zv, a, b), c), d) =>
-90	          RedTree(y, yv, BlackTree(z, zv, a, b), BlackTree(x, xv, c, d))
-91	        case (RedTree(y, yv, a, RedTree(z, zv, b, c)), d) =>
-92	          RedTree(z, zv, BlackTree(y, yv, a, b), BlackTree(x, xv, c, d))
-93	        case (a, RedTree(y, yv, b, RedTree(z, zv, c, d))) =>
-94	          RedTree(y, yv, BlackTree(x, xv, a, b), BlackTree(z, zv, c, d))
-95	        case (a, RedTree(y, yv, RedTree(z, zv, b, c), d)) =>
-96	          RedTree(z, zv, BlackTree(x, xv, a, b), BlackTree(y, yv, c, d))
-97	        case (a, b) => 
-98	          BlackTree(x, xv, a, b)
+87	        case (RedTree(y, yv, a, b), RedTree(z, zv, c, d)) => RedTree(x, xv, BlackTree(y, yv, a, b), BlackTree(z, zv, c, d))
+89	        case (RedTree(y, yv, RedTree(z, zv, a, b), c), d) => RedTree(y, yv, BlackTree(z, zv, a, b), BlackTree(x, xv, c, d))
+91	        case (RedTree(y, yv, a, RedTree(z, zv, b, c)), d) => RedTree(z, zv, BlackTree(y, yv, a, b), BlackTree(x, xv, c, d))
+93	        case (a, RedTree(y, yv, b, RedTree(z, zv, c, d))) => RedTree(y, yv, BlackTree(x, xv, a, b), BlackTree(z, zv, c, d))
+95	        case (a, RedTree(y, yv, RedTree(z, zv, b, c), d)) => RedTree(z, zv, BlackTree(x, xv, a, b), BlackTree(y, yv, c, d))
+97	        case (a, b) => BlackTree(x, xv, a, b)
 99	      }
 100	      def subl(t: Tree[B]) = t match {
 101	        case BlackTree(x, xv, a, b) => RedTree(x, xv, a, b)
 102	        case _ => error("Defect: invariance violation; expected black, got "+t)
 103	      }
 104	      def balLeft(x: A, xv: B, tl: Tree[B], tr: Tree[B]) = (tl, tr) match {
-105	        case (RedTree(y, yv, a, b), c) => 
-106	          RedTree(x, xv, BlackTree(y, yv, a, b), c)
-107	        case (bl, BlackTree(y, yv, a, b)) => 
-108	          balance(x, xv, bl, RedTree(y, yv, a, b))
-109	        case (bl, RedTree(y, yv, BlackTree(z, zv, a, b), c)) => 
-110	          RedTree(z, zv, BlackTree(x, xv, bl, a), balance(y, yv, b, subl(c)))
+105	        case (RedTree(y, yv, a, b), c) => RedTree(x, xv, BlackTree(y, yv, a, b), c)
+107	        case (bl, BlackTree(y, yv, a, b)) => balance(x, xv, bl, RedTree(y, yv, a, b))
+109	        case (bl, RedTree(y, yv, BlackTree(z, zv, a, b), c)) => RedTree(z, zv, BlackTree(x, xv, bl, a), balance(y, yv, b, subl(c)))
 111	        case _ => error("Defect: invariance violation at "+right)
 112	      }
 113	      def balRight(x: A, xv: B, tl: Tree[B], tr: Tree[B]) = (tl, tr) match {
-114	        case (a, RedTree(y, yv, b, c)) =>
-115	          RedTree(x, xv, a, BlackTree(y, yv, b, c))
-116	        case (BlackTree(y, yv, a, b), bl) =>
-117	          balance(x, xv, RedTree(y, yv, a, b), bl)
-118	        case (RedTree(y, yv, a, BlackTree(z, zv, b, c)), bl) =>
-119	          RedTree(z, zv, balance(y, yv, subl(a), b), BlackTree(x, xv, c, bl))
+114	        case (a, RedTree(y, yv, b, c)) =>  RedTree(x, xv, a, BlackTree(y, yv, b, c))
+116	        case (BlackTree(y, yv, a, b), bl) => balance(x, xv, RedTree(y, yv, a, b), bl)
+118	        case (RedTree(y, yv, a, BlackTree(z, zv, b, c)), bl) => RedTree(z, zv, balance(y, yv, subl(a), b), BlackTree(x, xv, c, bl))
 120	        case _ => error("Defect: invariance violation at "+left)
 121	      }
 122	      def delLeft = left match {
