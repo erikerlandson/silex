@@ -81,8 +81,10 @@ case class Leaf[K, V, P]()(implicit ord: Ordering[K], vsg: Semigroup[V], pim: In
   def ppv = pim.zero
 }
 
+sealed abstract class INode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends RBNode[K, V, P]
+
 case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])
-    (implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends RBNode[K, V, P] {
+    (implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends INode[K, V, P] {
   def get(k: K) =
     if (ord.lt(k, key)) lnode.get(k) else if (ord.gt(k, key)) rnode.get(k) else Some(value)
 
@@ -119,7 +121,7 @@ case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
 }
 
 case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])
-    (implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends RBNode[K, V, P] {
+    (implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends INode[K, V, P] {
   def get(k: K) =
     if (ord.lt(k, key)) lnode.get(k) else if (ord.gt(k, key)) rnode.get(k) else Some(value)
 
@@ -227,12 +229,11 @@ object RBNode {
 */
 }
 
-/*
-class RBNodeIterator[K, V](kv: (K, V), l: RBNode[K, V], r: RBNode[K, V]) extends Iterator[(K, V)] {
+class INodeIterator[K, V, P](c: INode[K, V, P], l: RBNode[K, V, P], r: RBNode[K, V, P]) extends Iterator[INode[K, V, P]] {
   // At any point in time, only one iterator is stored, which is important because
   // otherwise we'd instantiate all sub-iterators over the entire tree.  This way iterators
   // get GC'd once they are spent, and only a linear stack is instantiated at any one time.
-  var state = RBNodeIterator.stateL
+  var state = INodeIterator.stateL
   var itr = itrNext
 
   def hasNext = itr.hasNext
@@ -247,16 +248,16 @@ class RBNodeIterator[K, V](kv: (K, V), l: RBNode[K, V], r: RBNode[K, V]) extends
   // Adhere to in-order state transition: left-subtree -> current -> right-subtree 
   def itrNext = {
     var n = itrState
-    while (!n.hasNext && state < RBNodeIterator.stateR) n = itrState
+    while (!n.hasNext && state < INodeIterator.stateR) n = itrState
     n
   }
 
   // Get the iterator corresponding to next iteration state
   def itrState = {
     val i = state match {
-      case RBNodeIterator.stateL => RBNodeIterator(l)    // left subtree
-      case RBNodeIterator.stateC => Iterator.single(kv)  // current node
-      case RBNodeIterator.stateR => RBNodeIterator(r)    // right subtree
+      case INodeIterator.stateL => INodeIterator(l)    // left subtree
+      case INodeIterator.stateC => Iterator.single(c)   // current node
+      case INodeIterator.stateR => INodeIterator(r)    // right subtree
       case _ => Iterator.empty
     }
     state += 1
@@ -264,35 +265,64 @@ class RBNodeIterator[K, V](kv: (K, V), l: RBNode[K, V], r: RBNode[K, V]) extends
   }
 }
 
-private object RBNodeIterator {
+private object INodeIterator {
   // Iteration states corresponding to in-order tree traversal 
   val stateL = 1  // iterating over left subtree
   val stateC = 2  // current node
   val stateR = 3  // iterating over right subtree
 
   // Given a node, create an iterator over it and its sub-trees
-  def apply[K, V](node: RBNode[K, V]) = node match {
+  def apply[K, V, P](node: RBNode[K, V, P]) = node match {
     case Leaf() => Iterator.empty
-    case n: RNode[K, V] => new RBNodeIterator(((n.key, n.value)), n.lnode, n.rnode)
-    case n: BNode[K, V] => new RBNodeIterator(((n.key, n.value)), n.lnode, n.rnode)
+    case n: RNode[K, V, P] => new INodeIterator(n, n.lnode, n.rnode)
+    case n: BNode[K, V, P] => new INodeIterator(n, n.lnode, n.rnode)
   }
 }
 
-class RBMap[K, V](val node: RBNode[K, V]) extends AnyVal {
-  def +(kv: (K, V)) = new RBMap(node + kv)
+class PrefixTreeMap[K, V, P](val node: RBNode[K, V, P]) extends AnyVal {
+  def +(kv: (K, V)) = new PrefixTreeMap(node + kv)
+  def insert(k: K, v: V) = new PrefixTreeMap(node.insert(k, v))
+
+  def -(k: K) = new PrefixTreeMap(node.delete(k))
+  def delete(k: K) = new PrefixTreeMap(node.delete(k))
+
+  def increment(k: K, v: V) = new PrefixTreeMap(node.increment(k, v))
+
   def get(k: K) = node.get(k)
-  def iterator = RBNodeIterator(node)
+
+  def prefixSum(k: K, open: Boolean = false) = node.prefixSum(k, open)
+  def prefixSumVal(k: K, open: Boolean = false) = node.prefixSumVal(k, open)
+
+  def iterator = nodesIterator.map {
+    case n: RNode[K, V, P] => ((n.key, n.value))
+    case n: BNode[K, V, P] => ((n.key, n.value))
+  }
+
+  def nodes = nodesIterator.toIterable
+  def nodesIterator = INodeIterator(node)
+
+  def keys = keysIterator.toIterable
+  def keysIterator = nodesIterator.map {
+    case n: RNode[K, V, P] => n.key
+    case n: BNode[K, V, P] => n.key
+  }
+
+  def values = valuesIterator.toIterable
+  def valuesIterator = nodesIterator.map {
+    case n: RNode[K, V, P] => n.value
+    case n: BNode[K, V, P] => n.value
+  }
+
+  def prefixSums(open: Boolean = false) = prefixSumsIterator(open).toIterable
+  def prefixSumsIterator(open: Boolean = false) = keysIterator.map(node.prefixSum(_, open))
+
   override def toString = node.toString
 }
 
-object RBMap {
-  def empty[K, V](implicit ord: Ordering[K]) = new RBMap(Leaf[K, V]())
-
-  def apply[K, V](kv: (K, V)*)(implicit ord: Ordering[K]) =
-    new RBMap(kv.foldLeft(Leaf[K, V]() :RBNode[K, V])((m, e) => m + e))
+object PrefixTreeMap {
+  def apply[K, V, P](vsg: Semigroup[V], pim: IncrementingMonoid[P, V])(implicit ord: Ordering[K]) = new PrefixTreeMap(Leaf[K, V, P]()(ord, vsg, pim))
 }
 
-*/
 /*
     // https://lampsvn.epfl.ch/trac/scala/browser/scala/tags/R_2_8_1_final/src//library/scala/collection/immutable/RedBlack.scala#L1
     // Based on Stefan Kahrs' Haskell version of Okasaki's Red&Black Trees
@@ -354,4 +384,67 @@ object RBMap {
 151	      }
 152	    }
 153	
+*/
+
+/*
++      def balance(x: A, xv: B, tl: Tree[B], tr: Tree[B]) = (tl, tr) match {
++        case (RedTree(y, yv, a, b), RedTree(z, zv, c, d)) =>
++          RedTree(x, xv, BlackTree(y, yv, a, b), BlackTree(z, zv, c, d))
++        case (RedTree(y, yv, RedTree(z, zv, a, b), c), d) =>
++          RedTree(y, yv, BlackTree(z, zv, a, b), BlackTree(x, xv, c, d))
++        case (RedTree(y, yv, a, RedTree(z, zv, b, c)), d) =>
++          RedTree(z, zv, BlackTree(y, yv, a, b), BlackTree(x, xv, c, d))
++        case (a, RedTree(y, yv, b, RedTree(z, zv, c, d))) =>
++          RedTree(y, yv, BlackTree(x, xv, a, b), BlackTree(z, zv, c, d))
++        case (a, RedTree(y, yv, RedTree(z, zv, b, c), d)) =>
++          RedTree(z, zv, BlackTree(x, xv, a, b), BlackTree(y, yv, c, d))
++        case (a, b) => 
++          BlackTree(x, xv, a, b)
+       }
++      def subl(t: Tree[B]) = t match {
++        case BlackTree(x, xv, a, b) => RedTree(x, xv, a, b)
++        case _ => error("Defect: invariance violation; expected black, got "+t)
++      }
++      def balLeft(x: A, xv: B, tl: Tree[B], tr: Tree[B]) = (tl, tr) match {
++        case (RedTree(y, yv, a, b), c) => 
++          RedTree(x, xv, BlackTree(y, yv, a, b), c)
++        case (bl, BlackTree(y, yv, a, b)) => 
++          balance(x, xv, bl, RedTree(y, yv, a, b))
++        case (bl, RedTree(y, yv, BlackTree(z, zv, a, b), c)) => 
++          RedTree(z, zv, BlackTree(x, xv, bl, a), balance(y, yv, b, subl(c)))
++        case _ => error("Defect: invariance violation at "+right)
++      }
++      def balRight(x: A, xv: B, tl: Tree[B], tr: Tree[B]) = (tl, tr) match {
++        case (a, RedTree(y, yv, b, c)) =>
++          RedTree(x, xv, a, BlackTree(y, yv, b, c))
++        case (BlackTree(y, yv, a, b), bl) =>
++          balance(x, xv, RedTree(y, yv, a, b), bl)
++        case (RedTree(y, yv, a, BlackTree(z, zv, b, c)), bl) =>
++          RedTree(z, zv, balance(y, yv, subl(a), b), BlackTree(x, xv, c, bl))
++        case _ => error("Defect: invariance violation at "+left)
++      }
++      def delLeft = left match {
++        case _: BlackTree[_] => balLeft(key, value, left.del(k), right)
++        case _ => RedTree(key, value, left.del(k), right)
++      }
++      def delRight = right match {
++        case _: BlackTree[_] => balRight(key, value, left, right.del(k))
++        case _ => RedTree(key, value, left, right.del(k))
++      }
++      def append(tl: Tree[B], tr: Tree[B]): Tree[B] = (tl, tr) match {
++        case (Empty, t) => t
++        case (t, Empty) => t
++        case (RedTree(x, xv, a, b), RedTree(y, yv, c, d)) =>
++          append(b, c) match {
++            case RedTree(z, zv, bb, cc) => RedTree(z, zv, RedTree(x, xv, a, bb), RedTree(y, yv, cc, d))
++            case bc => RedTree(x, xv, a, RedTree(y, yv, bc, d))
++          }
++        case (BlackTree(x, xv, a, b), BlackTree(y, yv, c, d)) =>
++          append(b, c) match {
++            case RedTree(z, zv, bb, cc) => RedTree(z, zv, BlackTree(x, xv, a, bb), BlackTree(y, yv, cc, d))
++            case bc => balLeft(x, xv, a, BlackTree(y, yv, bc, d))
++          }
++        case (a, RedTree(x, xv, b, c)) => RedTree(x, xv, append(a, b), c)
++        case (RedTree(x, xv, a, b), c) => RedTree(x, xv, a, append(b, c))
++      }
 */
