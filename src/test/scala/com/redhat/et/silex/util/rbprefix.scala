@@ -99,14 +99,45 @@ object RBNodeProperties extends FlatSpec with Matchers {
     // Depth of deepest node should be <= twice the depth of shallowest
     testBalance(root) should be (true)
   }
-
-  // Int keys, values and prefixes, using standard integer addition
-  def mapType1 = PrefixTreeMap[Int, Int, Int](implicitly[Semigroup[Int]],IncrementingMonoid.fromMonoid(implicitly[Monoid[Int]]))
 }
 
 
 class PrefixTreeMapSpec extends FlatSpec with Matchers {
   import RBNodeProperties._
+
+  // Int keys, values and prefixes, using standard integer addition
+  def mapType1 = PrefixTreeMap[Int, Int, Int](implicitly[Semigroup[Int]],IncrementingMonoid.fromMonoid(implicitly[Monoid[Int]]))
+
+  // Assumes 'data' is in key order
+  def testDel[K, V, P](k: Int, data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
+    require(k <= data.length)
+    require(data.length <= 8)
+
+    val dataSet = data.toSet
+    data.combinations(k).flatMap(_.permutations).map(_.toSet).foreach { delSet =>
+      val delMap = delSet.map(_._1).foldLeft(ptmap)((m, e) => m.delete(e))
+      val delData = dataSet -- delSet
+    }
+  }
+
+  // Assumes 'data' is in key order
+  def testPrefix[K, V, P](data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
+    val mon = ptmap.prefixMonoid
+    val psTruth = data.map(_._2).scanLeft(mon.zero)((v, e) => mon.inc(v, e)).tail
+    ptmap.prefixSums() should beEqSeq(psTruth)
+  }
+
+  // Assumes 'data' is in key order
+  def test[K, V, P](data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
+    // verify R/B tree construction invariants
+    testRB(ptmap)
+
+    // verify the map elements are ordered by key
+    ptmap.iterator.map(_._1).toSeq should beEqSeq(data.map(_._1))
+
+    // verify the map correctly preserves key -> value mappings
+    data.map(x => ptmap.get(x._1)) should beEqSeq(data.map(x => Option(x._2)))
+  }
 
   it should "have valid empty object" in {
     testRB(mapType1)
@@ -118,18 +149,12 @@ class PrefixTreeMapSpec extends FlatSpec with Matchers {
 
   it should "build from data" in {
     val data = Vector.tabulate(100)(j => (j, j))
-    (1 to 1000).foreach { u =>
+    (1 to 100000).foreach { u =>
       val shuffled = scala.util.Random.shuffle(data)
-      val rbmap = shuffled.foldLeft(mapType1)((m, e) => m + e)
+      val ptmap = shuffled.foldLeft(mapType1)((m, e) => m + e)
 
-      // verify R/B tree construction invariants
-      testRB(rbmap)
-
-      // verify the map elements are ordered by key
-      rbmap.iterator.map(_._1).toSeq should beEqSeq(data.map(_._1))
-
-      // verify the map correctly preserves key -> value mappings
-      data.map(x => rbmap.get(x._1)) should beEqSeq(data.map(x => Option(x._2)))
+      test(data, ptmap)
+      //testPrefix(data, ptmap)
     }
   }
 }

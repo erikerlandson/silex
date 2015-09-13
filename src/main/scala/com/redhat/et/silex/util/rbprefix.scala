@@ -61,6 +61,10 @@ sealed abstract class RBNode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[
   final def prefixSum(k: K, open: Boolean = false) = pfSum(k, pim.zero, open)
   final def prefixSumVal(k: K, open: Boolean = false) = pfSV(k, pim.zero, open)
 
+  final def keyOrdering = ord
+  final def valueSemigroup = vsg
+  final def prefixMonoid = pim
+
   // internal
   def pfSum(k: K, sum: P, open: Boolean): P
   def pfSV(k: K, sum: P, open: Boolean): (P, Option[V])
@@ -315,6 +319,10 @@ class PrefixTreeMap[K, V, P](val node: RBNode[K, V, P]) extends AnyVal {
 
   def prefixSums(open: Boolean = false) = prefixSumsIterator(open).toIterable
   def prefixSumsIterator(open: Boolean = false) = keysIterator.map(node.prefixSum(_, open))
+
+  def keyOrdering = node.keyOrdering
+  def valueSemigroup = node.valueSemigroup
+  def prefixMonoid = node.prefixMonoid
 
   override def toString = node.toString
 }
