@@ -196,14 +196,14 @@ object RBNode {
     case (RNode(y, yv, yp, a, b), c) => rNode(x, xv, BNode(y, yv, yp, a, b), c)
     case (bl, BNode(y, yv, yp, a, b)) => balanceDel(x, xv, bl, RNode(y, yv, yp, a, b))
     case (bl, RNode(y, yv, yp, BNode(z, zv, zp, a, b), c)) => rNode(z, zv, bNode(x, xv, bl, a), balanceDel(y, yv, b, redden(c)))
-    case _ => Leaf()
+    case _ => bNode(x, xv, tl, tr)
   }
 
   def balanceRight[K, V, P](x: K, xv: V, tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
     case (a, RNode(y, yv, yp, b, c)) => rNode(x, xv, a, BNode(y, yv, yp, b, c))
     case (BNode(y, yv, yp, a, b), bl) => balanceDel(x, xv, RNode(y, yv, yp, a, b), bl)
     case (RNode(y, yv, yp, a, BNode(z, zv, zp, b, c)), bl) => rNode(z, zv, balanceDel(y, yv, redden(a), b), bNode(x, xv, c, bl))
-    case _ => Leaf()
+    case _ => bNode(x, xv, tl, tr)
   }
 
   def append[K, V, P](tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
@@ -219,16 +219,10 @@ object RBNode {
     }
     case (a, RNode(x, xv, xp, b, c)) => rNode(x, xv, append(a, b), c)
     case (RNode(x, xv, xp, a, b), c) => rNode(x, xv, a, append(b, c))
-    case _ => Leaf()
   }
 
   def apply[K, V, P](vsg: Semigroup[V], pim: IncrementingMonoid[P, V])(implicit ord: Ordering[K]): RBNode[K, V, P] =
     Leaf[K, V, P]()(ord, vsg, pim)
-
-/*
-  def apply[K, V, P](kv: (K, V)*)(implicit ord: Ordering[K]) =
-    new RBMap(kv.foldLeft(Leaf[K, V]() :RBNode[K, V])((m, e) => m + e))
-*/
 }
 
 class INodeIterator[K, V, P](c: INode[K, V, P], l: RBNode[K, V, P], r: RBNode[K, V, P]) extends Iterator[INode[K, V, P]] {
