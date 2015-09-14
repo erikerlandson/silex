@@ -71,7 +71,7 @@ sealed abstract class RBNode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[
   def ins(k: K, v: V): RBNode[K, V, P]
   def inc(k: K, v: V): RBNode[K, V, P]
   def del(k: K): RBNode[K, V, P]
-  def ppv: P
+  def pfs: P
 }
 
 case class Leaf[K, V, P]()(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends RBNode[K, V, P] {
@@ -79,88 +79,91 @@ case class Leaf[K, V, P]()(implicit ord: Ordering[K], vsg: Semigroup[V], pim: In
 
   def pfSum(k: K, sum: P, open: Boolean) = sum
   def pfSV(k: K, sum: P, open: Boolean) = (sum, None)
-  def ins(k: K, v: V) = RNode(k, v, pim.zero, this, this)
-  def inc(k: K, v: V) = RNode(k, v, pim.zero, this, this)
+  def ins(k: K, v: V) = RNode(k, v, pim.inc(pim.zero, v), this, this)
+  def inc(k: K, v: V) = RNode(k, v, pim.inc(pim.zero, v), this, this)
   def del(k: K) = this
-  def ppv = pim.zero
+  def pfs = pim.zero
 }
 
 sealed abstract class INode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends RBNode[K, V, P]
 
 case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])
     (implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends INode[K, V, P] {
+
+  import RBNode.{rNode, bNode}
+
   def get(k: K) =
     if (ord.lt(k, key)) lnode.get(k) else if (ord.gt(k, key)) rnode.get(k) else Some(value)
 
   def pfSum(k: K, sum: P, open: Boolean) =
-    if (ord.lt(k, key)) lnode.pfSum(k, sum, open) else if (ord.gt(k, key)) rnode.pfSum(k, pim.plus(sum, ppv), open) else if (open) pim.plus(sum, prefix) else pim.plus(sum, ppv)
-  def pfSV(k: K, sum: P, open: Boolean) =
-    if (ord.lt(k, key)) lnode.pfSV(k, sum, open) else if (ord.gt(k, key)) rnode.pfSV(k, pim.plus(sum, ppv), open) else if (open) (pim.plus(sum, prefix), Some(value)) else (pim.plus(sum, ppv), Some(value))
+    if (ord.lt(k, key)) lnode.pfSum(k, sum, open)
+    else if (ord.gt(k, key)) rnode.pfSum(k, pim.inc(pim.plus(sum, lnode.pfs), value), open)
+    else if (open) pim.plus(sum, lnode.pfs)
+    else pim.inc(pim.plus(sum, lnode.pfs), value)
+
+  def pfSV(k: K, sum: P, open: Boolean) = (pim.zero, None)
 
   def ins(k: K, v: V) =
-    if (ord.lt(k, key)) {
-      val lnew = lnode.ins(k, v)
-      RNode(key, value, lnew.ppv, lnew, rnode)
-    }
-    else if (ord.gt(k, key)) RNode(key, value, prefix, lnode, rnode.ins(k, v))
-    else RNode(key, v, prefix, lnode, rnode)
+    if (ord.lt(k, key)) rNode(key, value, lnode.ins(k, v), rnode)
+    else if (ord.gt(k, key)) rNode(key, value, lnode, rnode.ins(k, v))
+    else rNode(key, v, lnode, rnode)
 
   def inc(k: K, v: V) =
-    if (ord.lt(k, key)) {
-      val lnew = lnode.inc(k, v)
-      RNode(key, value, lnew.ppv, lnew, rnode)
-    }
-    else if (ord.gt(k, key)) RNode(key, value, prefix, lnode, rnode.inc(k, v))
-    else RNode(key, vsg.plus(value, v), prefix, lnode, rnode)
+    if (ord.lt(k, key)) rNode(key, value, lnode.inc(k, v), rnode)
+    else if (ord.gt(k, key)) rNode(key, value, lnode, rnode.inc(k, v))
+    else rNode(key, vsg.plus(value, v), lnode, rnode)
 
   def del(k: K) =
-    if (ord.lt(k, key)) {
-      val lnew = lnode.del(k)
-      RNode(key, value, lnew.ppv, lnew, rnode)
-    }
-    else if (ord.gt(k, key)) RNode(key, value, prefix, lnode, rnode.del(k))
+    if (ord.lt(k, key)) rNode(key, value, lnode.del(k), rnode)
+    else if (ord.gt(k, key)) rNode(key, value, lnode, rnode.del(k))
     else RBNode.append(lnode, rnode)
 
-  def ppv = pim.inc(prefix, value)
+  def pfs = prefix
 }
 
 case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])
     (implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends INode[K, V, P] {
+
+  import RBNode.{rNode, bNode}
+
   def get(k: K) =
     if (ord.lt(k, key)) lnode.get(k) else if (ord.gt(k, key)) rnode.get(k) else Some(value)
 
   def pfSum(k: K, sum: P, open: Boolean) =
-    if (ord.lt(k, key)) lnode.pfSum(k, sum, open) else if (ord.gt(k, key)) rnode.pfSum(k, pim.plus(sum, ppv), open) else if (open) pim.plus(sum, prefix) else pim.plus(sum, ppv)
-  def pfSV(k: K, sum: P, open: Boolean) =
-    if (ord.lt(k, key)) lnode.pfSV(k, sum, open) else if (ord.gt(k, key)) rnode.pfSV(k, pim.plus(sum, ppv), open) else if (open) (pim.plus(sum, prefix), Some(value)) else (pim.plus(sum, ppv), Some(value))
+    if (ord.lt(k, key)) lnode.pfSum(k, sum, open)
+    else if (ord.gt(k, key)) rnode.pfSum(k, pim.inc(pim.plus(sum, lnode.pfs), value), open)
+    else if (open) pim.plus(sum, lnode.pfs)
+    else pim.inc(pim.plus(sum, lnode.pfs), value)
+
+  def pfSV(k: K, sum: P, open: Boolean) = (pim.zero, None)
 
   def ins(k: K, v: V) =
-    if (ord.lt(k, key)) {
-      val lnew = lnode.ins(k, v)
-      RBNode.balance(BNode(key, value, lnew.ppv, lnew, rnode))
-    }
-    else if (ord.gt(k, key)) RBNode.balance(BNode(key, value, prefix, lnode, rnode.ins(k, v)))
-    else BNode(key, v, prefix, lnode, rnode)
+    if (ord.lt(k, key)) RBNode.balance(bNode(key, value, lnode.ins(k, v), rnode))
+    else if (ord.gt(k, key)) RBNode.balance(bNode(key, value, lnode, rnode.ins(k, v)))
+    else bNode(key, v, lnode, rnode)
 
   def inc(k: K, v: V) =
-    if (ord.lt(k, key)) {
-      val lnew = lnode.inc(k, v)
-      RBNode.balance(BNode(key, value, lnew.ppv, lnew, rnode))
-    }
-    else if (ord.gt(k, key)) RBNode.balance(BNode(key, value, prefix, lnode, rnode.inc(k, v)))
-    else BNode(key, vsg.plus(value, v), prefix, lnode, rnode)
+    if (ord.lt(k, key)) RBNode.balance(bNode(key, value, lnode.inc(k, v), rnode))
+    else if (ord.gt(k, key)) RBNode.balance(bNode(key, value, lnode, rnode.inc(k, v)))
+    else bNode(key, vsg.plus(value, v), lnode, rnode)
 
   def del(k: K) =
     if (ord.lt(k, key)) RBNode.balanceLeft(key, value, lnode.del(k), rnode)
     else if (ord.gt(k, key)) RBNode.balanceRight(key, value, lnode, rnode.del(k))
     else RBNode.append(lnode, rnode)
 
-  def ppv = pim.inc(prefix, value)
+  def pfs = prefix
 }
 
 object RBNode {
   import scala.language.implicitConversions
   implicit def fromPrefixTreeMap[K, V, P](rbm: PrefixTreeMap[K, V, P]): RBNode[K, V, P] = rbm.node
+
+  def rNode[K, V, P](key: K, value: V, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RNode[K, V, P] =
+    RNode(key, value, pim.inc(pim.plus(lnode.pfs, rnode.pfs), value), lnode, rnode)
+
+  def bNode[K, V, P](key: K, value: V, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): BNode[K, V, P]  =
+    BNode(key, value, pim.inc(pim.plus(lnode.pfs, rnode.pfs), value), lnode, rnode)
 
   def blacken[K, V, P](node: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) = node match {
     case RNode(k, v, p, l, r) => BNode(k, v, p, l, r)
@@ -171,29 +174,35 @@ object RBNode {
     case n => n
   }
 
+  // balance for insertion
+  def balance[K, V, P](node: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) = node match {
+    case BNode(kG, vG, pG, RNode(kP, vP, pP, RNode(kC, vC, pC, lC, rC), rP), rG) => rNode(kP, vP, bNode(kC, vC, lC, rC), bNode(kG, vG, rP, rG))
+    case BNode(kG, vG, pG, RNode(kP, vP, pP, lP, RNode(kC, vC, pC, lC, rC)), rG) => rNode(kC, vC, bNode(kP, vP, lP, lC), bNode(kG, vG, rC, rG))
+    case BNode(kG, vG, pG, lG, RNode(kP, vP, pP, RNode(kC, vC, pC, lC, rC), rP)) => rNode(kC, vC, bNode(kG, vG, lG, lC), bNode(kP, vP, rC, rP))
+    case BNode(kG, vG, pG, lG, RNode(kP, vP, pP, lP, RNode(kC, vC, pC, lC, rC))) => rNode(kP, vP, bNode(kG, vG, lG, lP), bNode(kC, vC, lC, rC))
+    case _ => node
+  }
+
   def balanceDel[K, V, P](x: K, xv: V, tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
-    case (RNode(y, yv, yp, a, b), RNode(z, zv, zp, c, d)) => RNode(x, xv, pim.inc(yp, yv), BNode(y, yv, yp, a, b), BNode(z, zv, zp, c, d))
-    case (RNode(y, yv, yp, RNode(z, zv, zp, a, b), c), d) => RNode(y, yv, pim.inc(zp, zv), BNode(z, zv, zp, a, b), BNode(x, xv, c.ppv, c, d))
-    case (RNode(y, yv, yp, a, RNode(z, zv, zp, b, c)), d) => RNode(z, zv, pim.inc(yp, yv), BNode(y, yv, yp, a, b), BNode(x, xv, c.ppv, c, d))
-    case (a, RNode(y, yv, yp, b, RNode(z, zv, zp, c, d))) => RNode(y, yv, pim.inc(a.ppv, xv), BNode(x, xv, a.ppv, a, b), BNode(z, zv, zp, c, d))
-    case (a, RNode(y, yv, yp, RNode(z, zv, zp, b, c), d)) => RNode(z, zv, pim.inc(a.ppv, xv), BNode(x, xv, a.ppv, a, b), BNode(y, yv, c.ppv, c, d))
-    case (a, b) => BNode(x, xv, a.ppv, a, b)
+    case (RNode(y, yv, yp, a, b), RNode(z, zv, zp, c, d)) => rNode(x, xv, bNode(y, yv, a, b), bNode(z, zv, c, d))
+    case (RNode(y, yv, yp, RNode(z, zv, zp, a, b), c), d) => rNode(y, yv, bNode(z, zv, a, b), bNode(x, xv, c, d))
+    case (RNode(y, yv, yp, a, RNode(z, zv, zp, b, c)), d) => rNode(z, zv, bNode(y, yv, a, b), bNode(x, xv, c, d))
+    case (a, RNode(y, yv, yp, b, RNode(z, zv, zp, c, d))) => rNode(y, yv, bNode(x, xv, a, b), bNode(z, zv, c, d))
+    case (a, RNode(y, yv, yp, RNode(z, zv, zp, b, c), d)) => rNode(z, zv, bNode(x, xv, a, b), bNode(y, yv, c, d))
+    case (a, b) => bNode(x, xv, a, b)
   }
 
   def balanceLeft[K, V, P](x: K, xv: V, tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
-    case (RNode(y, yv, yp, a, b), c) => RNode(x, xv, pim.inc(yp, yv), BNode(y, yv, yp, a, b), c)
+    case (RNode(y, yv, yp, a, b), c) => rNode(x, xv, BNode(y, yv, yp, a, b), c)
     case (bl, BNode(y, yv, yp, a, b)) => balanceDel(x, xv, bl, RNode(y, yv, yp, a, b))
-    case (bl, RNode(y, yv, yp, BNode(z, zv, zp, a, b), c)) => RNode(z, zv, pim.inc(bl.ppv, xv), BNode(x, xv, bl.ppv, bl, a), balanceDel(y, yv, b, redden(c)))
+    case (bl, RNode(y, yv, yp, BNode(z, zv, zp, a, b), c)) => rNode(z, zv, bNode(x, xv, bl, a), balanceDel(y, yv, b, redden(c)))
     case _ => Leaf()
   }
 
   def balanceRight[K, V, P](x: K, xv: V, tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
-    case (a, RNode(y, yv, yp, b, c)) => RNode(x, xv, a.ppv, a, BNode(y, yv, yp, b, c))
+    case (a, RNode(y, yv, yp, b, c)) => rNode(x, xv, a, BNode(y, yv, yp, b, c))
     case (BNode(y, yv, yp, a, b), bl) => balanceDel(x, xv, RNode(y, yv, yp, a, b), bl)
-    case (RNode(y, yv, yp, a, BNode(z, zv, zp, b, c)), bl) => {
-      val lnew = balanceDel(y, yv, redden(a), b)
-      RNode(z, zv, lnew.ppv, lnew, BNode(x, xv, c.ppv, c, bl))
-    }
+    case (RNode(y, yv, yp, a, BNode(z, zv, zp, b, c)), bl) => rNode(z, zv, balanceDel(y, yv, redden(a), b), bNode(x, xv, c, bl))
     case _ => Leaf()
   }
 
@@ -201,27 +210,16 @@ object RBNode {
     case (Leaf(), n) => n
     case (n, Leaf()) => n
     case (RNode(x, xv, xp, a, b), RNode(y, yv, yp, c, d)) => append(b, c) match {
-      case RNode(z, zv, zp, bb, cc) => RNode(z, zv, pim.inc(xp, xv), RNode(x, xv, xp, a, bb), RNode(y, yv, cc.ppv, cc, d))
-      case bc => RNode(x, xv, xp, a, RNode(y, yv, bc.ppv, bc, d))
+      case RNode(z, zv, zp, bb, cc) => rNode(z, zv, rNode(x, xv, a, bb), rNode(y, yv, cc, d))
+      case bc => rNode(x, xv, a, rNode(y, yv, bc, d))
     }
     case (BNode(x, xv, xp, a, b), BNode(y, yv, yp, c, d)) => append(b, c) match {
-      case RNode(z, zv, zp, bb, cc) => RNode(z, zv, pim.inc(xp, xv), BNode(x, xv, xp, a, bb), BNode(y, yv, cc.ppv, cc, d))
-      case bc => balanceLeft(x, xv, a, BNode(y, yv, bc.ppv, bc, d))
+      case RNode(z, zv, zp, bb, cc) => rNode(z, zv, bNode(x, xv, a, bb), bNode(y, yv, cc, d))
+      case bc => balanceLeft(x, xv, a, bNode(y, yv, bc, d))
     }
-    case (a, RNode(x, xv, xp, b, c)) => {
-      val lnew = append(a, b)
-      RNode(x, xv, lnew.ppv, lnew, c)
-    }
-    case (RNode(x, xv, xp, a, b), c) => RNode(x, xv, xp, a, append(b, c))
+    case (a, RNode(x, xv, xp, b, c)) => rNode(x, xv, append(a, b), c)
+    case (RNode(x, xv, xp, a, b), c) => rNode(x, xv, a, append(b, c))
     case _ => Leaf()
-  }
-
-  def balance[K, V, P](node: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) = node match {
-    case BNode(kG, vG, pG, RNode(kP, vP, pP, RNode(kC, vC, pC, lC, rC), rP), rG) => RNode(kP, vP, pim.inc(pC, vC), BNode(kC, vC, pC, lC, rC), BNode(kG, vG, rP.ppv, rP, rG))
-    case BNode(kG, vG, pG, RNode(kP, vP, pP, lP, RNode(kC, vC, pC, lC, rC)), rG) => RNode(kC, vC, pim.inc(pP, vP), BNode(kP, vP, pP, lP, lC), BNode(kG, vG, rC.ppv, rC, rG))
-    case BNode(kG, vG, pG, lG, RNode(kP, vP, pP, RNode(kC, vC, pC, lC, rC), rP)) => RNode(kC, vC, pim.inc(pG, vG), BNode(kG, vG, pG, lG, lC), BNode(kP, vP, rC.ppv, rC, rP))
-    case BNode(kG, vG, pG, lG, RNode(kP, vP, pP, lP, RNode(kC, vC, pC, lC, rC))) => RNode(kP, vP, pim.inc(pG, vG), BNode(kG, vG, pG, lG, lP), BNode(kC, vC, pC, lC, rC))
-    case _ => node
   }
 
   def apply[K, V, P](vsg: Semigroup[V], pim: IncrementingMonoid[P, V])(implicit ord: Ordering[K]): RBNode[K, V, P] =

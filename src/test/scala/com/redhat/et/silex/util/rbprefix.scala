@@ -149,12 +149,12 @@ class PrefixTreeMapSpec extends FlatSpec with Matchers {
 
   it should "build from data" in {
     val data = Vector.tabulate(100)(j => (j, j))
-    (1 to 100000).foreach { u =>
+    (1 to 10000).foreach { u =>
       val shuffled = scala.util.Random.shuffle(data)
       val ptmap = shuffled.foldLeft(mapType1)((m, e) => m + e)
 
       test(data, ptmap)
-      //testPrefix(data, ptmap)
+      testPrefix(data, ptmap)
     }
   }
 }
