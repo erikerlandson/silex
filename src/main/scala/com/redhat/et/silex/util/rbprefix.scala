@@ -245,6 +245,9 @@ object RBNode {
     case (RNode(x, xv, xp, a, b), c) => rNode(x, xv, a, append(b, c))
   }
 
+  // NOTE: the balancing rules for node deletion all assume that the case of deleting a key
+  // that is not in the map is addressed elsewhere.  If these balancing functions are applied
+  // to a key that isn't present, they will fail destructively and uninformatively.
   def delLeft[K, V, P](node: INode[K, V, P], k: K)(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = node.lnode match {
     case n: BNode[K, V, P] => balanceLeft(node.key, node.value, node.lnode.del(k), node.rnode)
     case _ => rNode(node.key, node.value, node.lnode.del(k), node.rnode)
