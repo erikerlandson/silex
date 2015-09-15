@@ -22,6 +22,22 @@ import math.Ordering
 
 import com.twitter.algebird.{ Semigroup, Monoid, MonoidAggregator }
 
+/*
+trait Node[K,V] {
+  val ord: Ordering[K]
+}
+
+trait INode[K, V] {
+  val key: K
+  val value: V
+  val lnode: Node[K, V]
+  val rnode: Node[K, V]
+}
+
+case class C1Node[K, V](key: K, value: V, lnode: Node[K, V], rnode: Node[K, V])
+case class C2Node[K, V](key: K, value: V, lnode: Node[K, V], rnode: Node[K, V])
+*/
+
 trait IncrementingMonoid[T, E] extends Monoid[T] {
   def inc(t: T, e: E): T
 }
@@ -52,9 +68,10 @@ object IncrementingMonoid {
 sealed abstract class RBNode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) {
   final def +(kv: (K, V)) = RBNode.blacken(ins(kv._1, kv._2))
   final def insert(k: K, v: V) = RBNode.blacken(ins(k, v))
-  final def delete(k: K) = RBNode.blacken(del(k))
+  final def delete(k: K) = if (contains(k)) RBNode.blacken(del(k)) else this
 
   def get(k: K): Option[V]
+  final def contains(k: K) = get(k).isDefined
 
   final def increment(k: K, v: V) = inc(k, v)
 
@@ -85,7 +102,13 @@ case class Leaf[K, V, P]()(implicit ord: Ordering[K], vsg: Semigroup[V], pim: In
   def pfs = pim.zero
 }
 
-sealed abstract class INode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends RBNode[K, V, P]
+sealed abstract class INode[K, V, P](implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends RBNode[K, V, P] {
+  val key: K
+  val value: V
+  val lnode: RBNode[K, V, P]
+  val rnode: RBNode[K, V, P]
+  val prefix: P
+}
 
 case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], rnode: RBNode[K, V, P])
     (implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) extends INode[K, V, P] {
@@ -114,8 +137,8 @@ case class RNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
     else rNode(key, vsg.plus(value, v), lnode, rnode)
 
   def del(k: K) =
-    if (ord.lt(k, key)) rNode(key, value, lnode.del(k), rnode)
-    else if (ord.gt(k, key)) rNode(key, value, lnode, rnode.del(k))
+    if (ord.lt(k, key)) RBNode.delLeft(this, k)
+    else if (ord.gt(k, key)) RBNode.delRight(this, k)
     else RBNode.append(lnode, rnode)
 
   def pfs = prefix
@@ -148,8 +171,8 @@ case class BNode[K, V, P](key: K, value: V, prefix: P, lnode: RBNode[K, V, P], r
     else bNode(key, vsg.plus(value, v), lnode, rnode)
 
   def del(k: K) =
-    if (ord.lt(k, key)) RBNode.balanceLeft(key, value, lnode.del(k), rnode)
-    else if (ord.gt(k, key)) RBNode.balanceRight(key, value, lnode, rnode.del(k))
+    if (ord.lt(k, key)) RBNode.delLeft(this, k)
+    else if (ord.gt(k, key)) RBNode.delRight(this, k)
     else RBNode.append(lnode, rnode)
 
   def pfs = prefix
@@ -171,7 +194,8 @@ object RBNode {
   }
   def redden[K, V, P](node: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]) = node match {
     case BNode(k, v, p, l, r) => RNode(k, v, p, l, r)
-    case n => n
+    case n: RNode[K, V, P] => n
+    case _ => throw new Exception("illegal attempt to make a leaf node red")
   }
 
   // balance for insertion
@@ -196,14 +220,14 @@ object RBNode {
     case (RNode(y, yv, yp, a, b), c) => rNode(x, xv, BNode(y, yv, yp, a, b), c)
     case (bl, BNode(y, yv, yp, a, b)) => balanceDel(x, xv, bl, RNode(y, yv, yp, a, b))
     case (bl, RNode(y, yv, yp, BNode(z, zv, zp, a, b), c)) => rNode(z, zv, bNode(x, xv, bl, a), balanceDel(y, yv, b, redden(c)))
-    case _ => bNode(x, xv, tl, tr)
+    case _ => throw new Exception(s"undefined pattern in tree pair: ($tl, $tr)")
   }
 
   def balanceRight[K, V, P](x: K, xv: V, tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
     case (a, RNode(y, yv, yp, b, c)) => rNode(x, xv, a, BNode(y, yv, yp, b, c))
     case (BNode(y, yv, yp, a, b), bl) => balanceDel(x, xv, RNode(y, yv, yp, a, b), bl)
     case (RNode(y, yv, yp, a, BNode(z, zv, zp, b, c)), bl) => rNode(z, zv, balanceDel(y, yv, redden(a), b), bNode(x, xv, c, bl))
-    case _ => bNode(x, xv, tl, tr)
+    case _ => throw new Exception(s"undefined pattern in tree pair: ($tl, $tr)")
   }
 
   def append[K, V, P](tl: RBNode[K, V, P], tr: RBNode[K, V, P])(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = (tl, tr) match {
@@ -221,11 +245,21 @@ object RBNode {
     case (RNode(x, xv, xp, a, b), c) => rNode(x, xv, a, append(b, c))
   }
 
+  def delLeft[K, V, P](node: INode[K, V, P], k: K)(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = node.lnode match {
+    case n: BNode[K, V, P] => balanceLeft(node.key, node.value, node.lnode.del(k), node.rnode)
+    case _ => rNode(node.key, node.value, node.lnode.del(k), node.rnode)
+  }
+
+  def delRight[K, V, P](node: INode[K, V, P], k: K)(implicit ord: Ordering[K], vsg: Semigroup[V], pim: IncrementingMonoid[P, V]): RBNode[K, V, P] = node.rnode match {
+    case n: BNode[K, V, P] => balanceRight(node.key, node.value, node.lnode, node.rnode.del(k))
+    case _ => rNode(node.key, node.value, node.lnode, node.rnode.del(k))
+  }
+
   def apply[K, V, P](vsg: Semigroup[V], pim: IncrementingMonoid[P, V])(implicit ord: Ordering[K]): RBNode[K, V, P] =
     Leaf[K, V, P]()(ord, vsg, pim)
 }
 
-class INodeIterator[K, V, P](c: INode[K, V, P], l: RBNode[K, V, P], r: RBNode[K, V, P]) extends Iterator[INode[K, V, P]] {
+class INodeIterator[K, V, P](node: INode[K, V, P]) extends Iterator[INode[K, V, P]] {
   // At any point in time, only one iterator is stored, which is important because
   // otherwise we'd instantiate all sub-iterators over the entire tree.  This way iterators
   // get GC'd once they are spent, and only a linear stack is instantiated at any one time.
@@ -251,9 +285,9 @@ class INodeIterator[K, V, P](c: INode[K, V, P], l: RBNode[K, V, P], r: RBNode[K,
   // Get the iterator corresponding to next iteration state
   def itrState = {
     val i = state match {
-      case INodeIterator.stateL => INodeIterator(l)    // left subtree
-      case INodeIterator.stateC => Iterator.single(c)   // current node
-      case INodeIterator.stateR => INodeIterator(r)    // right subtree
+      case INodeIterator.stateL => INodeIterator(node.lnode)  // left subtree
+      case INodeIterator.stateC => Iterator.single(node)      // current node
+      case INodeIterator.stateR => INodeIterator(node.rnode)  // right subtree
       case _ => Iterator.empty
     }
     state += 1
@@ -270,8 +304,7 @@ private object INodeIterator {
   // Given a node, create an iterator over it and its sub-trees
   def apply[K, V, P](node: RBNode[K, V, P]) = node match {
     case Leaf() => Iterator.empty
-    case n: RNode[K, V, P] => new INodeIterator(n, n.lnode, n.rnode)
-    case n: BNode[K, V, P] => new INodeIterator(n, n.lnode, n.rnode)
+    case n: INode[K, V, P] => new INodeIterator(n)
   }
 }
 
@@ -289,28 +322,24 @@ class PrefixTreeMap[K, V, P](val node: RBNode[K, V, P]) extends AnyVal {
   def prefixSum(k: K, open: Boolean = false) = node.prefixSum(k, open)
   def prefixSumVal(k: K, open: Boolean = false) = node.prefixSumVal(k, open)
 
-  def iterator = nodesIterator.map {
-    case n: RNode[K, V, P] => ((n.key, n.value))
-    case n: BNode[K, V, P] => ((n.key, n.value))
-  }
+  def iterator = nodesIterator.map(n => ((n.key, n.value)))
 
   def nodes = nodesIterator.toIterable
   def nodesIterator = INodeIterator(node)
 
   def keys = keysIterator.toIterable
-  def keysIterator = nodesIterator.map {
-    case n: RNode[K, V, P] => n.key
-    case n: BNode[K, V, P] => n.key
-  }
+  def keysIterator = nodesIterator.map(_.key)
 
   def values = valuesIterator.toIterable
-  def valuesIterator = nodesIterator.map {
-    case n: RNode[K, V, P] => n.value
-    case n: BNode[K, V, P] => n.value
-  }
+  def valuesIterator = nodesIterator.map(_.value)
 
   def prefixSums(open: Boolean = false) = prefixSumsIterator(open).toIterable
-  def prefixSumsIterator(open: Boolean = false) = keysIterator.map(node.prefixSum(_, open))
+  //def prefixSumsIterator(open: Boolean = false) = keysIterator.map(node.prefixSum(_, open))
+  def prefixSumsIterator(open: Boolean = false) = {
+    val mon = prefixMonoid
+    val itr = valuesIterator.scanLeft(mon.zero)((p,e)=>mon.inc(p,e))
+    if (open) itr.takeWhile(_ => itr.hasNext) else itr.drop(1)
+  }
 
   def keyOrdering = node.keyOrdering
   def valueSemigroup = node.valueSemigroup

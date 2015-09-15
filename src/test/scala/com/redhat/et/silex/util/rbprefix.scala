@@ -109,51 +109,62 @@ class PrefixTreeMapSpec extends FlatSpec with Matchers {
   def mapType1 = PrefixTreeMap[Int, Int, Int](implicitly[Semigroup[Int]],IncrementingMonoid.fromMonoid(implicitly[Monoid[Int]]))
 
   // Assumes 'data' is in key order
-  def testDel[K, V, P](k: Int, data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
-    require(k <= data.length)
-    require(data.length <= 8)
+  def testKV[K, V, P](data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
+    // verify the map elements are ordered by key
+    ptmap.keys should beEqSeq(data.map(_._1))
 
-    val dataSet = data.toSet
-    data.combinations(k).flatMap(_.permutations).map(_.toSet).foreach { delSet =>
-      val delMap = delSet.map(_._1).foldLeft(ptmap)((m, e) => m.delete(e))
-      val delData = dataSet -- delSet
-    }
+    // verify the map correctly preserves key -> value mappings
+    data.map(x => ptmap.get(x._1)) should beEqSeq(data.map(x => Option(x._2)))
+    ptmap.values should beEqSeq(data.map(_._2))
   }
 
   // Assumes 'data' is in key order
   def testPrefix[K, V, P](data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
     val mon = ptmap.prefixMonoid
-    val psTruth = data.map(_._2).scanLeft(mon.zero)((v, e) => mon.inc(v, e)).tail
-    ptmap.prefixSums() should beEqSeq(psTruth)
+    val psTruth = data.map(_._2).scanLeft(mon.zero)((v, e) => mon.inc(v, e))
+    ptmap.prefixSums() should beEqSeq(psTruth.tail)
+    ptmap.prefixSums(open=true) should beEqSeq(psTruth.dropRight(1))
+    ptmap.prefixSums() should beEqSeq(ptmap.keys.map(k => ptmap.prefixSum(k)))
+    ptmap.prefixSums(open=true) should beEqSeq(ptmap.keys.map(k => ptmap.prefixSum(k, open=true)))
   }
 
   // Assumes 'data' is in key order
-  def test[K, V, P](data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
-    // verify R/B tree construction invariants
-    testRB(ptmap)
-
-    // verify the map elements are ordered by key
-    ptmap.iterator.map(_._1).toSeq should beEqSeq(data.map(_._1))
-
-    // verify the map correctly preserves key -> value mappings
-    data.map(x => ptmap.get(x._1)) should beEqSeq(data.map(x => Option(x._2)))
+  def testDel[K, V, P](data: Seq[(K, V)], ptmap: PrefixTreeMap[K, V, P]) {
+    data.iterator.map(_._1).foreach { key =>
+      val delMap = ptmap.delete(key)
+      val delData = data.filter(_._1 != key)
+      testRB(delMap)
+      testKV(delData, delMap)
+      testPrefix(delData, delMap)
+    }
   }
 
-  it should "have valid empty object" in {
-    testRB(mapType1)
+  it should "pass exhaustive tree patterns" in {
+    // N should remain small, because we are about to exhaustively test N! patterns.
+    // Values larger than 8 rapidly start to take a lot of time, for example my runs for
+    // N = 10 complete in about 20 minutes.
+    val N = 8
+    (0 to N).foreach { n =>
+      val data = Vector.tabulate(n)(j => (j, j))
+      data.permutations.foreach { shuffle =>
+        val ptmap = shuffle.foldLeft(mapType1)((m, e) => m + e)
+        testRB(ptmap)
+        testKV(data, ptmap)
+        testDel(data, ptmap)
+        testPrefix(data, ptmap)
+      }
+    }
   }
 
-  it should "insert initial node" in {
-    testRB(mapType1 + ((1, 3)))
-  }
-
-  it should "build from data" in {
+  it should "pass randomized tree patterns" in {
     val data = Vector.tabulate(100)(j => (j, j))
-    (1 to 10000).foreach { u =>
+    (1 to 100).foreach { u =>
       val shuffled = scala.util.Random.shuffle(data)
       val ptmap = shuffled.foldLeft(mapType1)((m, e) => m + e)
 
-      test(data, ptmap)
+      testRB(ptmap)
+      testKV(data, ptmap)
+      testDel(data, ptmap)
       testPrefix(data, ptmap)
     }
   }
