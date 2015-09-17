@@ -123,21 +123,21 @@ trait INode[K, V] extends RBNode[K, V] {
   val value: V
   val lsub: RBNode[K, V]
   val rsub: RBNode[K, V]
-}
 
-trait RNode[K, V] extends INode[K, V] {
   def get(k: K) =
     if (keyOrdering.lt(k, key)) lsub.get(k) else if (keyOrdering.gt(k, key)) rsub.get(k) else Some(value)
-
-  def ins(k: K, v: V) =
-    if (keyOrdering.lt(k, key)) rNode(key, value, lsub.ins(k, v), rsub)
-    else if (keyOrdering.gt(k, key)) rNode(key, value, lsub, rsub.ins(k, v))
-    else rNode(key, v, lsub, rsub)
 
   def del(k: K) =
     if (keyOrdering.lt(k, key)) delLeft(this, k)
     else if (keyOrdering.gt(k, key)) delRight(this, k)
     else append(lsub, rsub)
+}
+
+trait RNode[K, V] extends INode[K, V] {
+  def ins(k: K, v: V) =
+    if (keyOrdering.lt(k, key)) rNode(key, value, lsub.ins(k, v), rsub)
+    else if (keyOrdering.gt(k, key)) rNode(key, value, lsub, rsub.ins(k, v))
+    else rNode(key, v, lsub, rsub)
 }
 
 object RNode {
@@ -145,18 +145,10 @@ object RNode {
 }
 
 trait BNode[K, V] extends INode[K, V] {
-  def get(k: K) =
-    if (keyOrdering.lt(k, key)) lsub.get(k) else if (keyOrdering.gt(k, key)) rsub.get(k) else Some(value)
-
   def ins(k: K, v: V) =
     if (keyOrdering.lt(k, key)) balance(bNode(key, value, lsub.ins(k, v), rsub))
     else if (keyOrdering.gt(k, key)) balance(bNode(key, value, lsub, rsub.ins(k, v)))
     else bNode(key, v, lsub, rsub)
-
-  def del(k: K) =
-    if (keyOrdering.lt(k, key)) delLeft(this, k)
-    else if (keyOrdering.gt(k, key)) delRight(this, k)
-    else append(lsub, rsub)
 }
 
 object BNode {
@@ -240,8 +232,8 @@ trait RBMapLike[K, V, IN <: INode[K, V], M <: RBMapLike[K, V, IN, M]] {
   override def toString = node.toString
 }
 
-class RBMap[K, V](val node: RBNode[K, V]) extends RBMapLike[K, V, INode[K, V], RBMap[K, V]] {
-  def build(n: RBNode[K, V]) = new RBMap(n)
+case class RBMap[K, V](node: RBNode[K, V]) extends RBMapLike[K, V, INode[K, V], RBMap[K, V]] {
+  def build(n: RBNode[K, V]) = RBMap(n)
 }
 
 object RBMap {
@@ -260,7 +252,7 @@ object RBMap {
     }
   }
   def empty[K, V](implicit ord: Ordering[K]): RBMap[K, V] = {
-     new RBMap(new Reify[K, V](ord) with Leaf[K, V])
+    RBMap(new Reify[K, V](ord) with Leaf[K, V])
   }
 }
 
@@ -290,5 +282,81 @@ object IncrementingMonoid {
     def zero = z
     def plus(l: T, r: T) = p(l, r)
     def inc(t: T, e: T) = p(t, e)
+  }
+}
+
+trait RBNodePS[K, V, P] extends RBNode[K, V] {
+  val prefixMonoid: IncrementingMonoid[P, V]
+
+  final def prefixSum(k: K, open: Boolean = false) = pfSum(k, prefixMonoid.zero, open)
+
+  def pfSum(k: K, sum: P, open: Boolean): P
+  def pfs: P
+}
+
+trait LeafPS[K, V, P] extends RBNodePS[K, V, P] with Leaf[K, V] {
+  def pfSum(k: K, sum: P, open: Boolean) = sum
+  def pfs = prefixMonoid.zero  
+}
+
+trait INodePS[K, V, P] extends RBNodePS[K, V, P] with INode[K, V] {
+  val lsub: RBNodePS[K, V, P]
+  val rsub: RBNodePS[K, V, P]
+
+  val prefix: P
+
+  def pfSum(k: K, sum: P, open: Boolean) =
+    if (keyOrdering.lt(k, key)) lsub.pfSum(k, sum, open)
+    else if (keyOrdering.gt(k, key)) rsub.pfSum(k, prefixMonoid.inc(prefixMonoid.plus(sum, lsub.pfs), value), open)
+    else if (open) prefixMonoid.plus(sum, lsub.pfs)
+    else prefixMonoid.inc(prefixMonoid.plus(sum, lsub.pfs), value)
+
+  def pfs = prefix
+}
+
+trait RNodePS[K, V, P] extends INodePS[K, V, P] with RNode[K, V]
+trait BNodePS[K, V, P] extends INodePS[K, V, P] with BNode[K, V]
+
+trait RBMapPSLike[K, V, P, IN <: INodePS[K, V, P], M <: RBMapPSLike[K, V, P, IN, M]] extends RBMapLike[K, V, IN, M] {
+  val node: RBNodePS[K, V, P]
+
+  def prefixSum(k: K, open: Boolean = false) = node.prefixSum(k, open)
+
+  def prefixSums(open: Boolean = false) = prefixSumsIterator(open).toIterable
+
+  def prefixSumsIterator(open: Boolean = false) = {
+    val mon = node.prefixMonoid
+    val itr = valuesIterator.scanLeft(mon.zero)((p,e)=>mon.inc(p,e))
+    if (open) itr.takeWhile(_ => itr.hasNext) else itr.drop(1)
+  }
+
+  def prefixMonoid = node.prefixMonoid
+
+  override def toString = node.toString
+}
+
+case class RBMapPS[K, V, P](node: RBNodePS[K, V, P]) extends RBMapPSLike[K, V, P, INodePS[K, V, P], RBMapPS[K, V, P]] {
+  def build(n: RBNode[K, V]) = RBMapPS(n.asInstanceOf[RBNodePS[K, V, P]])
+}
+
+object RBMapPS {
+  class Reify[K, V, P](val keyOrdering: Ordering[K], val prefixMonoid: IncrementingMonoid[P, V]) {
+    def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V, P](keyOrdering, prefixMonoid) with RNodePS[K, V, P] {
+      val key = k
+      val value = v
+      val lsub = ls.asInstanceOf[RBNodePS[K, V, P]]
+      val rsub = rs.asInstanceOf[RBNodePS[K, V, P]]
+      val prefix = prefixMonoid.inc(prefixMonoid.plus(lsub.pfs, rsub.pfs), value)
+    }
+    def bNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V, P](keyOrdering, prefixMonoid) with BNodePS[K, V, P] {
+      val key = k
+      val value = v
+      val lsub = ls.asInstanceOf[RBNodePS[K, V, P]]
+      val rsub = rs.asInstanceOf[RBNodePS[K, V, P]]
+      val prefix = prefixMonoid.inc(prefixMonoid.plus(lsub.pfs, rsub.pfs), value)
+    }
+  }
+  def empty[K, V, P](monoid: IncrementingMonoid[P, V])(implicit ord: Ordering[K]): RBMapPS[K, V, P] = {
+    RBMapPS(new Reify[K, V, P](ord, monoid) with LeafPS[K, V, P])
   }
 }
