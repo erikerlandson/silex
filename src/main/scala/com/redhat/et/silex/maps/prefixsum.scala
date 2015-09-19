@@ -20,7 +20,7 @@ package com.redhat.et.silex.maps.prefixsum
 
 import math.Ordering
 
-import com.twitter.algebird.{ Semigroup, Monoid, MonoidAggregator }
+import com.twitter.algebird.{Monoid, MonoidAggregator}
 
 import com.redhat.et.silex.maps.ordered.tree._
 import com.redhat.et.silex.maps.ordered.infra._
