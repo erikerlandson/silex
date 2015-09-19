@@ -209,7 +209,7 @@ object infra {
     }
   }
 
-  trait RBMapLike[K, V, IN <: INode[K, V], M <: RBMapLike[K, V, IN, M]] {
+  trait OrderedMapLike[K, V, IN <: INode[K, V], M <: OrderedMapLike[K, V, IN, M]] {
     val root: RBNode[K, V]
 
     def build(n: RBNode[K, V]): M
@@ -241,12 +241,12 @@ object infra {
 
 import com.redhat.et.silex.maps.ordered.infra._
 
-case class RBMap[K, V](root: RBNode[K, V]) extends RBMapLike[K, V, INode[K, V], RBMap[K, V]] {
-  def build(n: RBNode[K, V]) = RBMap(n)
-  override def toString = "RBMap(" + nodesIterator.map(n => s"${n.key} -> ${n.value}").mkString(", ")  + ")"
+case class OrderedMap[K, V](root: RBNode[K, V]) extends OrderedMapLike[K, V, INode[K, V], OrderedMap[K, V]] {
+  def build(n: RBNode[K, V]) = OrderedMap(n)
+  override def toString = "OrderedMap(" + nodesIterator.map(n => s"${n.key} -> ${n.value}").mkString(", ")  + ")"
 }
 
-object RBMap {
+object OrderedMap {
   class Reify[K, V](val keyOrdering: Ordering[K]) {
     def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V](keyOrdering) with RNode[K, V] {
       val key = k
@@ -263,6 +263,6 @@ object RBMap {
   }
   trait Get
   def key[K](implicit ord: Ordering[K]) = new Get {
-    def value[V] = RBMap(new Reify[K, V](ord) with Leaf[K, V])
+    def value[V] = OrderedMap(new Reify[K, V](ord) with Leaf[K, V])
   }
 }

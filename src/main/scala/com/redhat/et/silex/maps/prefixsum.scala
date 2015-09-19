@@ -64,7 +64,7 @@ object tree {
 import com.redhat.et.silex.maps.prefixsum.tree._
 
 object infra {
-  trait RBMapPSLike[K, V, P, M <: RBMapPSLike[K, V, P, M]] extends RBMapLike[K, V, INodePS[K, V, P], M] {
+  trait PrefixSumMapLike[K, V, P, M <: PrefixSumMapLike[K, V, P, M]] extends OrderedMapLike[K, V, INodePS[K, V, P], M] {
     val root: RBNodePS[K, V, P]
 
     def prefixSum(k: K, open: Boolean = false) = root.prefixSum(k, open)
@@ -110,14 +110,14 @@ object IncrementingMonoid {
 
 import com.redhat.et.silex.maps.prefixsum.infra._
 
-case class RBMapPS[K, V, P](root: RBNodePS[K, V, P]) extends RBMapPSLike[K, V, P, RBMapPS[K, V, P]] {
-  def build(n: RBNode[K, V]) = RBMapPS(n.asInstanceOf[RBNodePS[K, V, P]])
+case class PrefixSumMap[K, V, P](root: RBNodePS[K, V, P]) extends PrefixSumMapLike[K, V, P, PrefixSumMap[K, V, P]] {
+  def build(n: RBNode[K, V]) = PrefixSumMap(n.asInstanceOf[RBNodePS[K, V, P]])
 
   override def toString =
-    "RBMapPS(" + iterator.zip(prefixSumsIterator()).map(x => s"${x._1._1} -> (${x._1._2}, ${x._2})").mkString(", ") + ")"
+    "PrefixSumMap(" + iterator.zip(prefixSumsIterator()).map(x => s"${x._1._1} -> (${x._1._2}, ${x._2})").mkString(", ") + ")"
 }
 
-object RBMapPS {
+object PrefixSumMap {
   class Reify[K, V, P](val keyOrdering: Ordering[K], val prefixMonoid: IncrementingMonoid[P, V]) {
     def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V, P](keyOrdering, prefixMonoid) with RNodePS[K, V, P] {
       val key = k
@@ -139,7 +139,7 @@ object RBMapPS {
   def key[K](implicit ord: Ordering[K]) = new Get {
     def value[V] = new Get {
       def prefix[P](implicit mon: IncrementingMonoid[P, V]) =
-        RBMapPS(new Reify[K, V, P](ord, mon) with LeafPS[K, V, P])
+        PrefixSumMap(new Reify[K, V, P](ord, mon) with LeafPS[K, V, P])
     }
   }
 }
