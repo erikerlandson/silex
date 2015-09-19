@@ -48,35 +48,48 @@ object tree {
 
     // balance for insertion
     def balance(node: RBNode[K, V]) = node match {
-      case BNode(kG, vG, RNode(kP, vP, RNode(kC, vC, lC, rC), rP), rG) => rNode(kP, vP, bNode(kC, vC, lC, rC), bNode(kG, vG, rP, rG))
-      case BNode(kG, vG, RNode(kP, vP, lP, RNode(kC, vC, lC, rC)), rG) => rNode(kC, vC, bNode(kP, vP, lP, lC), bNode(kG, vG, rC, rG))
-      case BNode(kG, vG, lG, RNode(kP, vP, RNode(kC, vC, lC, rC), rP)) => rNode(kC, vC, bNode(kG, vG, lG, lC), bNode(kP, vP, rC, rP))
-      case BNode(kG, vG, lG, RNode(kP, vP, lP, RNode(kC, vC, lC, rC))) => rNode(kP, vP, bNode(kG, vG, lG, lP), bNode(kC, vC, lC, rC))
+      case BNode(kG, vG, RNode(kP, vP, RNode(kC, vC, lC, rC), rP), rG) =>
+        rNode(kP, vP, bNode(kC, vC, lC, rC), bNode(kG, vG, rP, rG))
+      case BNode(kG, vG, RNode(kP, vP, lP, RNode(kC, vC, lC, rC)), rG) =>
+        rNode(kC, vC, bNode(kP, vP, lP, lC), bNode(kG, vG, rC, rG))
+      case BNode(kG, vG, lG, RNode(kP, vP, RNode(kC, vC, lC, rC), rP)) =>
+        rNode(kC, vC, bNode(kG, vG, lG, lC), bNode(kP, vP, rC, rP))
+      case BNode(kG, vG, lG, RNode(kP, vP, lP, RNode(kC, vC, lC, rC))) =>
+        rNode(kP, vP, bNode(kG, vG, lG, lP), bNode(kC, vC, lC, rC))
       case _ => node
     }
 
     def balanceDel(x: K, xv: V, tl: RBNode[K, V], tr: RBNode[K, V]): RBNode[K, V] = (tl, tr) match {
-      case (RNode(y, yv, a, b), RNode(z, zv, c, d)) => rNode(x, xv, bNode(y, yv, a, b), bNode(z, zv, c, d))
-      case (RNode(y, yv, RNode(z, zv, a, b), c), d) => rNode(y, yv, bNode(z, zv, a, b), bNode(x, xv, c, d))
-      case (RNode(y, yv, a, RNode(z, zv, b, c)), d) => rNode(z, zv, bNode(y, yv, a, b), bNode(x, xv, c, d))
-      case (a, RNode(y, yv, b, RNode(z, zv, c, d))) => rNode(y, yv, bNode(x, xv, a, b), bNode(z, zv, c, d))
-      case (a, RNode(y, yv, RNode(z, zv, b, c), d)) => rNode(z, zv, bNode(x, xv, a, b), bNode(y, yv, c, d))
+      case (RNode(y, yv, a, b), RNode(z, zv, c, d)) =>
+        rNode(x, xv, bNode(y, yv, a, b), bNode(z, zv, c, d))
+      case (RNode(y, yv, RNode(z, zv, a, b), c), d) =>
+        rNode(y, yv, bNode(z, zv, a, b), bNode(x, xv, c, d))
+      case (RNode(y, yv, a, RNode(z, zv, b, c)), d) =>
+        rNode(z, zv, bNode(y, yv, a, b), bNode(x, xv, c, d))
+      case (a, RNode(y, yv, b, RNode(z, zv, c, d))) =>
+        rNode(y, yv, bNode(x, xv, a, b), bNode(z, zv, c, d))
+      case (a, RNode(y, yv, RNode(z, zv, b, c), d)) =>
+        rNode(z, zv, bNode(x, xv, a, b), bNode(y, yv, c, d))
       case (a, b) => bNode(x, xv, a, b)
     }
 
-    def balanceLeft(x: K, xv: V, tl: RBNode[K, V], tr: RBNode[K, V]): RBNode[K, V] = (tl, tr) match {
-      case (RNode(y, yv, a, b), c) => rNode(x, xv, bNode(y, yv, a, b), c)
-      case (bl, BNode(y, yv, a, b)) => balanceDel(x, xv, bl, rNode(y, yv, a, b))
-      case (bl, RNode(y, yv, BNode(z, zv, a, b), c)) => rNode(z, zv, bNode(x, xv, bl, a), balanceDel(y, yv, b, redden(c)))
-      case _ => throw new Exception(s"undefined pattern in tree pair: ($tl, $tr)")
-    }
+    def balanceLeft(x: K, xv: V, tl: RBNode[K, V], tr: RBNode[K, V]): RBNode[K, V] =
+      (tl, tr) match {
+        case (RNode(y, yv, a, b), c) => rNode(x, xv, bNode(y, yv, a, b), c)
+        case (bl, BNode(y, yv, a, b)) => balanceDel(x, xv, bl, rNode(y, yv, a, b))
+        case (bl, RNode(y, yv, BNode(z, zv, a, b), c)) =>
+          rNode(z, zv, bNode(x, xv, bl, a), balanceDel(y, yv, b, redden(c)))
+        case _ => throw new Exception(s"undefined pattern in tree pair: ($tl, $tr)")
+      }
 
-    def balanceRight(x: K, xv: V, tl: RBNode[K, V], tr: RBNode[K, V]): RBNode[K, V] = (tl, tr) match {
-      case (a, RNode(y, yv, b, c)) => rNode(x, xv, a, bNode(y, yv, b, c))
-      case (BNode(y, yv, a, b), bl) => balanceDel(x, xv, rNode(y, yv, a, b), bl)
-      case (RNode(y, yv, a, BNode(z, zv, b, c)), bl) => rNode(z, zv, balanceDel(y, yv, redden(a), b), bNode(x, xv, c, bl))
-      case _ => throw new Exception(s"undefined pattern in tree pair: ($tl, $tr)")
-    }
+    def balanceRight(x: K, xv: V, tl: RBNode[K, V], tr: RBNode[K, V]): RBNode[K, V] =
+      (tl, tr) match {
+        case (a, RNode(y, yv, b, c)) => rNode(x, xv, a, bNode(y, yv, b, c))
+        case (BNode(y, yv, a, b), bl) => balanceDel(x, xv, rNode(y, yv, a, b), bl)
+        case (RNode(y, yv, a, BNode(z, zv, b, c)), bl) =>
+          rNode(z, zv, balanceDel(y, yv, redden(a), b), bNode(x, xv, c, bl))
+        case _ => throw new Exception(s"undefined pattern in tree pair: ($tl, $tr)")
+      }
 
     def append(tl: RBNode[K, V], tr: RBNode[K, V]): RBNode[K, V] = (tl, tr) match {
       case (Leaf(), n) => n
@@ -125,7 +138,9 @@ object tree {
     val rsub: RBNode[K, V]
 
     def node(k: K) =
-      if (keyOrdering.lt(k, key)) lsub.node(k) else if (keyOrdering.gt(k, key)) rsub.node(k) else Some(this)
+      if (keyOrdering.lt(k, key)) lsub.node(k)
+      else if (keyOrdering.gt(k, key)) rsub.node(k)
+      else Some(this)
 
     def del(k: K) =
       if (keyOrdering.lt(k, key)) delLeft(this, k)
@@ -143,7 +158,8 @@ object tree {
   }
 
   object RNode {
-    def unapply[K, V](node: RNode[K, V]): Option[(K, V, RBNode[K, V], RBNode[K, V])] = Some((node.key, node.value, node.lsub, node.rsub))
+    def unapply[K, V](node: RNode[K, V]): Option[(K, V, RBNode[K, V], RBNode[K, V])] =
+      Some((node.key, node.value, node.lsub, node.rsub))
   }
 
   trait BNode[K, V] extends INode[K, V] {
@@ -154,7 +170,8 @@ object tree {
   }
 
   object BNode {
-    def unapply[K, V](node: BNode[K, V]): Option[(K, V, RBNode[K, V], RBNode[K, V])] = Some((node.key, node.value, node.lsub, node.rsub))
+    def unapply[K, V](node: BNode[K, V]): Option[(K, V, RBNode[K, V], RBNode[K, V])] =
+      Some((node.key, node.value, node.lsub, node.rsub))
   }
 }
 
@@ -241,26 +258,35 @@ object infra {
 
 import com.redhat.et.silex.maps.ordered.infra._
 
-case class OrderedMap[K, V](root: RBNode[K, V]) extends OrderedMapLike[K, V, INode[K, V], OrderedMap[K, V]] {
+case class OrderedMap[K, V](root: RBNode[K, V]) extends
+    OrderedMapLike[K, V, INode[K, V], OrderedMap[K, V]] {
+
   def build(n: RBNode[K, V]) = OrderedMap(n)
-  override def toString = "OrderedMap(" + nodesIterator.map(n => s"${n.key} -> ${n.value}").mkString(", ")  + ")"
+  override def toString =
+    "OrderedMap(" +
+      nodesIterator.map(n => s"${n.key} -> ${n.value}").mkString(", ") +
+    ")"
 }
 
 object OrderedMap {
   class Reify[K, V](val keyOrdering: Ordering[K]) {
-    def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V](keyOrdering) with RNode[K, V] {
-      val key = k
-      val value = v
-      val lsub = ls
-      val rsub = rs
-    }
-    def bNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V](keyOrdering) with BNode[K, V] {
-      val key = k
-      val value = v
-      val lsub = ls
-      val rsub = rs
-    }
+    def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) =
+      new Reify[K, V](keyOrdering) with RNode[K, V] {
+        val key = k
+        val value = v
+        val lsub = ls
+        val rsub = rs
+      }
+
+    def bNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) =
+      new Reify[K, V](keyOrdering) with BNode[K, V] {
+        val key = k
+        val value = v
+        val lsub = ls
+        val rsub = rs
+      }
   }
+
   def key[K](implicit ord: Ordering[K]) = new AnyRef {
     def value[V] = OrderedMap(new Reify[K, V](ord) with Leaf[K, V])
   }

@@ -47,10 +47,14 @@ object tree {
     val prefix: P
 
     def pfSum(k: K, sum: P, open: Boolean) =
-      if (keyOrdering.lt(k, key)) lsub.pfSum(k, sum, open)
-      else if (keyOrdering.gt(k, key)) rsub.pfSum(k, prefixMonoid.inc(prefixMonoid.plus(sum, lsub.pfs), value), open)
-      else if (open) prefixMonoid.plus(sum, lsub.pfs)
-      else prefixMonoid.inc(prefixMonoid.plus(sum, lsub.pfs), value)
+      if (keyOrdering.lt(k, key))
+        lsub.pfSum(k, sum, open)
+      else if (keyOrdering.gt(k, key))
+        rsub.pfSum(k, prefixMonoid.inc(prefixMonoid.plus(sum, lsub.pfs), value), open)
+      else if (open)
+        prefixMonoid.plus(sum, lsub.pfs)
+      else
+        prefixMonoid.inc(prefixMonoid.plus(sum, lsub.pfs), value)
 
     def pfs = prefix
 
@@ -64,7 +68,9 @@ object tree {
 import com.redhat.et.silex.maps.prefixsum.tree._
 
 object infra {
-  trait PrefixSumMapLike[K, V, P, M <: PrefixSumMapLike[K, V, P, M]] extends OrderedMapLike[K, V, INodePS[K, V, P], M] {
+  trait PrefixSumMapLike[K, V, P, M <: PrefixSumMapLike[K, V, P, M]] extends
+      OrderedMapLike[K, V, INodePS[K, V, P], M] {
+
     val root: RBNodePS[K, V, P]
 
     def prefixSum(k: K, open: Boolean = false) = root.prefixSum(k, open)
@@ -96,7 +102,8 @@ object IncrementingMonoid {
     def plus(l: T, r: T) = monoid.plus(l, r)
     def inc(t: T, e: T) = monoid.plus(t, e)
   }
-  def from[T, E](z: T, p: (T, T) => T, i: (T, E) => T): IncrementingMonoid[T, E] = new IncrementingMonoid[T, E] {
+  def from[T, E](z: T, p: (T, T) => T, i: (T, E) => T): IncrementingMonoid[T, E] =
+    new IncrementingMonoid[T, E] {
     def zero = z
     def plus(l: T, r: T) = p(l, r)
     def inc(t: T, e: E) = i(t, e)
@@ -110,29 +117,37 @@ object IncrementingMonoid {
 
 import com.redhat.et.silex.maps.prefixsum.infra._
 
-case class PrefixSumMap[K, V, P](root: RBNodePS[K, V, P]) extends PrefixSumMapLike[K, V, P, PrefixSumMap[K, V, P]] {
+case class PrefixSumMap[K, V, P](root: RBNodePS[K, V, P]) extends
+    PrefixSumMapLike[K, V, P, PrefixSumMap[K, V, P]] {
+
   def build(n: RBNode[K, V]) = PrefixSumMap(n.asInstanceOf[RBNodePS[K, V, P]])
 
   override def toString =
-    "PrefixSumMap(" + iterator.zip(prefixSumsIterator()).map(x => s"${x._1._1} -> (${x._1._2}, ${x._2})").mkString(", ") + ")"
+    "PrefixSumMap(" +
+      iterator.zip(prefixSumsIterator())
+        .map(x => s"${x._1._1} -> (${x._1._2}, ${x._2})").mkString(", ") +
+    ")"
 }
 
 object PrefixSumMap {
   class Reify[K, V, P](val keyOrdering: Ordering[K], val prefixMonoid: IncrementingMonoid[P, V]) {
-    def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V, P](keyOrdering, prefixMonoid) with RNodePS[K, V, P] {
-      val key = k
-      val value = v
-      val lsub = ls.asInstanceOf[RBNodePS[K, V, P]]
-      val rsub = rs.asInstanceOf[RBNodePS[K, V, P]]
-      val prefix = prefixMonoid.inc(prefixMonoid.plus(lsub.pfs, rsub.pfs), value)
-    }
-    def bNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) = new Reify[K, V, P](keyOrdering, prefixMonoid) with BNodePS[K, V, P] {
-      val key = k
-      val value = v
-      val lsub = ls.asInstanceOf[RBNodePS[K, V, P]]
-      val rsub = rs.asInstanceOf[RBNodePS[K, V, P]]
-      val prefix = prefixMonoid.inc(prefixMonoid.plus(lsub.pfs, rsub.pfs), value)
-    }
+    def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) =
+      new Reify[K, V, P](keyOrdering, prefixMonoid) with RNodePS[K, V, P] {
+        val key = k
+        val value = v
+        val lsub = ls.asInstanceOf[RBNodePS[K, V, P]]
+        val rsub = rs.asInstanceOf[RBNodePS[K, V, P]]
+        val prefix = prefixMonoid.inc(prefixMonoid.plus(lsub.pfs, rsub.pfs), value)
+     }
+
+    def bNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) =
+      new Reify[K, V, P](keyOrdering, prefixMonoid) with BNodePS[K, V, P] {
+        val key = k
+        val value = v
+        val lsub = ls.asInstanceOf[RBNodePS[K, V, P]]
+        val rsub = rs.asInstanceOf[RBNodePS[K, V, P]]
+        val prefix = prefixMonoid.inc(prefixMonoid.plus(lsub.pfs, rsub.pfs), value)
+     }
   }
 
   def key[K](implicit ord: Ordering[K]) = new AnyRef {
