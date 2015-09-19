@@ -20,14 +20,14 @@ package com.redhat.et.silex.maps.incrementing
 
 import math.Ordering
 
-import com.twitter.algebird.Semigroup
+import com.twitter.algebird.Monoid
 
 import com.redhat.et.silex.maps.ordered.tree._
 import com.redhat.et.silex.maps.ordered.infra._
 
 object tree {
   trait RBNodeInc[K, V] extends RBNode[K, V] {
-    val valueSemigroup: Semigroup[V]
+    val valueMonoid: Monoid[V]
 
     final def increment(k: K, iv: V) = blacken(inc(k, iv))
 
@@ -35,7 +35,7 @@ object tree {
   }
 
   trait LeafInc[K, V] extends RBNodeInc[K, V] with Leaf[K, V] {
-    def inc(k: K, iv: V) = rNode(k, iv, this, this)
+    def inc(k: K, iv: V) = rNode(k, valueMonoid.plus(valueMonoid.zero, iv), this, this)
   }
 
   trait INodeInc[K, V] extends RBNodeInc[K, V] with INode[K, V] {
@@ -47,14 +47,14 @@ object tree {
     def inc(k: K, iv: V) =
       if (keyOrdering.lt(k, key)) rNode(key, value, lsub.inc(k, iv), rsub)
       else if (keyOrdering.gt(k, key)) rNode(key, value, lsub, rsub.inc(k, iv))
-      else rNode(key, valueSemigroup.plus(value, iv), lsub, rsub)
+      else rNode(key, valueMonoid.plus(value, iv), lsub, rsub)
   }
 
   trait BNodeInc[K, V] extends INodeInc[K, V] with BNode[K, V] {
     def inc(k: K, iv: V) =
       if (keyOrdering.lt(k, key)) balance(bNode(key, value, lsub.inc(k, iv), rsub))
       else if (keyOrdering.gt(k, key)) balance(bNode(key, value, lsub, rsub.inc(k, iv)))
-      else bNode(key, valueSemigroup.plus(value, iv), lsub, rsub)
+      else bNode(key, valueMonoid.plus(value, iv), lsub, rsub)
   }
 }
 
@@ -68,7 +68,7 @@ object infra {
 
     def increment(k: K, iv: V) = build(root.increment(k, iv))
 
-    def valueSemigroup = root.valueSemigroup
+    def valueMonoid = root.valueMonoid
   }
 }
 
@@ -86,9 +86,9 @@ case class IncrementingMap[K, V](root: RBNodeInc[K, V]) extends
 }
 
 object IncrementingMap {
-  class Reify[K, V](val keyOrdering: Ordering[K], val valueSemigroup: Semigroup[V]) {
+  class Reify[K, V](val keyOrdering: Ordering[K], val valueMonoid: Monoid[V]) {
     def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) =
-      new Reify[K, V](keyOrdering, valueSemigroup) with RNodeInc[K, V] {
+      new Reify[K, V](keyOrdering, valueMonoid) with RNodeInc[K, V] {
         val key = k
         val value = v
         val lsub = ls.asInstanceOf[RBNodeInc[K, V]]
@@ -96,7 +96,7 @@ object IncrementingMap {
       }
 
     def bNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) =
-      new Reify[K, V](keyOrdering, valueSemigroup) with BNodeInc[K, V] {
+      new Reify[K, V](keyOrdering, valueMonoid) with BNodeInc[K, V] {
         val key = k
         val value = v
         val lsub = ls.asInstanceOf[RBNodeInc[K, V]]
@@ -105,7 +105,7 @@ object IncrementingMap {
   }
 
   def key[K](implicit ord: Ordering[K]) = new AnyRef {
-    def value[V](implicit vsg: Semigroup[V]) =
-      IncrementingMap(new Reify[K, V](ord, vsg) with LeafInc[K, V])
+    def value[V](implicit mon: Monoid[V]) =
+      IncrementingMap(new Reify[K, V](ord, mon) with LeafInc[K, V])
   }
 }
