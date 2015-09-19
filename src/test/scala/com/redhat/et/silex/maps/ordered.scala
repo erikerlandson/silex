@@ -103,7 +103,10 @@ object OrderedMapProperties extends FlatSpec with Matchers {
   import RBNodeProperties._
 
   // Assumes 'data' is in key order
-  def testKV[K, V, IN <: INode[K, V], M <: OrderedMapLike[K, V, IN, M]](data: Seq[(K, V)], omap: OrderedMapLike[K, V, IN, M]) {
+  def testKV[K, V, IN <: INode[K, V], M <: OrderedMapLike[K, V, IN, M]](
+    data: Seq[(K, V)],
+    omap: OrderedMapLike[K, V, IN, M]) {
+
     // verify the map elements are ordered by key
     omap.keys should beEqSeq(data.map(_._1))
 
@@ -113,7 +116,10 @@ object OrderedMapProperties extends FlatSpec with Matchers {
   }
 
   // Assumes 'data' is in key order
-  def testDel[K, V, IN <: INode[K, V], M <: OrderedMapLike[K, V, IN, M]](data: Seq[(K, V)], omap: OrderedMapLike[K, V, IN, M]) {
+  def testDel[K, V, IN <: INode[K, V], M <: OrderedMapLike[K, V, IN, M]](
+    data: Seq[(K, V)],
+    omap: OrderedMapLike[K, V, IN, M]) {
+
     data.iterator.map(_._1).foreach { key =>
       val delMap = omap.delete(key)
       val delData = data.filter(_._1 != key)

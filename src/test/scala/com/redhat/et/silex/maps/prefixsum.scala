@@ -29,7 +29,10 @@ object PrefixSumMapProperties extends FlatSpec with Matchers {
   import infra._
 
   // Assumes 'data' is in key order
-  def testPrefix[K, V, P, M <: PrefixSumMapLike[K, V, P, M]](data: Seq[(K, V)], psmap: PrefixSumMapLike[K, V, P, M]) {
+  def testPrefix[K, V, P, M <: PrefixSumMapLike[K, V, P, M]](
+    data: Seq[(K, V)],
+    psmap: PrefixSumMapLike[K, V, P, M]) {
+
     val mon = psmap.prefixMonoid
     val psTruth = data.map(_._2).scanLeft(mon.zero)((v, e) => mon.inc(v, e))
     psmap.prefixSums() should beEqSeq(psTruth.tail)
@@ -47,7 +50,9 @@ class PrefixSumMapSpec extends FlatSpec with Matchers {
 
   import PrefixSumMapProperties._
 
-  def mapType1 = PrefixSumMap.key[Int].value[Int].prefix(IncrementingMonoid.fromMonoid(implicitly[Monoid[Int]]))
+  def mapType1 =
+    PrefixSumMap.key[Int].value[Int]
+      .prefix(IncrementingMonoid.fromMonoid(implicitly[Monoid[Int]]))
 
   it should "pass randomized tree patterns" in {
     val data = Vector.tabulate(100)(j => (j, j))
