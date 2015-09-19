@@ -135,9 +135,8 @@ object PrefixSumMap {
     }
   }
 
-  trait Get
-  def key[K](implicit ord: Ordering[K]) = new Get {
-    def value[V] = new Get {
+  def key[K](implicit ord: Ordering[K]) = new AnyRef {
+    def value[V] = new AnyRef {
       def prefix[P](implicit mon: IncrementingMonoid[P, V]) =
         PrefixSumMap(new Reify[K, V, P](ord, mon) with LeafPS[K, V, P])
     }

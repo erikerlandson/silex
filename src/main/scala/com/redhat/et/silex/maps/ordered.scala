@@ -261,8 +261,7 @@ object OrderedMap {
       val rsub = rs
     }
   }
-  trait Get
-  def key[K](implicit ord: Ordering[K]) = new Get {
+  def key[K](implicit ord: Ordering[K]) = new AnyRef {
     def value[V] = OrderedMap(new Reify[K, V](ord) with Leaf[K, V])
   }
 }
