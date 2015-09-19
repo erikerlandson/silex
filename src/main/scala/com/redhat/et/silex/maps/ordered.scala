@@ -158,7 +158,7 @@ object tree {
   }
 }
 
-com.redhat.et.silex.maps.ordered.tree._
+import com.redhat.et.silex.maps.ordered.tree._
 
 object infra {
   class INodeIterator[K, V, IN <: INode[K, V]](node: IN) extends Iterator[IN] {
@@ -262,7 +262,7 @@ object RBMap {
     }
   }
   trait Get
-  def key[K](implicit ord: Ordering[K]) = Get {
+  def key[K](implicit ord: Ordering[K]) = new Get {
     def value[V] = RBMap(new Reify[K, V](ord) with Leaf[K, V])
   }
 }
