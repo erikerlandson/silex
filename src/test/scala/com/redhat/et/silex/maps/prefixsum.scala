@@ -29,9 +29,9 @@ object PrefixSumMapProperties extends FlatSpec with Matchers {
   import infra._
 
   // Assumes 'data' is in key order
-  def testPrefix[K, V, P, M <: PrefixSumMapLike[K, V, P, M]](
+  def testPrefix[K, V, P, IN <: INodePS[K, V, P], M <: PrefixSumMapLike[K, V, P, IN, M]](
     data: Seq[(K, V)],
-    psmap: PrefixSumMapLike[K, V, P, M]) {
+    psmap: PrefixSumMapLike[K, V, P, IN, M]) {
 
     val mon = psmap.prefixMonoid
     val psTruth = data.map(_._2).scanLeft(mon.zero)((v, e) => mon.inc(v, e))

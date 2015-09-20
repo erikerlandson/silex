@@ -68,8 +68,8 @@ object tree {
 import com.redhat.et.silex.maps.prefixsum.tree._
 
 object infra {
-  trait PrefixSumMapLike[K, V, P, M <: PrefixSumMapLike[K, V, P, M]] extends
-      OrderedMapLike[K, V, INodePS[K, V, P], M] {
+  trait PrefixSumMapLike[K, V, P, IN <: INodePS[K, V, P], M <: PrefixSumMapLike[K, V, P, IN, M]]
+      extends OrderedMapLike[K, V, IN, M] {
 
     val root: RBNodePS[K, V, P]
 
@@ -118,7 +118,7 @@ object IncrementingMonoid {
 import com.redhat.et.silex.maps.prefixsum.infra._
 
 case class PrefixSumMap[K, V, P](root: RBNodePS[K, V, P]) extends
-    PrefixSumMapLike[K, V, P, PrefixSumMap[K, V, P]] {
+    PrefixSumMapLike[K, V, P, INodePS[K, V, P], PrefixSumMap[K, V, P]] {
 
   def build(n: RBNode[K, V]) = PrefixSumMap(n.asInstanceOf[RBNodePS[K, V, P]])
 

@@ -83,8 +83,8 @@ object tree {
 import tree._
 
 object infra {
-  trait NearestMapLike[K, V, M <: NearestMapLike[K, V, M]] extends
-      OrderedMapLike[K, V, INodeNear[K, V], M] {
+  trait NearestMapLike[K, V, IN <: INodeNear[K, V], M <: NearestMapLike[K, V, IN, M]] extends
+      OrderedMapLike[K, V, IN, M] {
 
     val root: RBNodeNear[K, V]
 
@@ -95,7 +95,7 @@ object infra {
 import infra._
 
 case class NearestMap[K, V](root: RBNodeNear[K, V]) extends
-    NearestMapLike[K, V, NearestMap[K, V]] {
+    NearestMapLike[K, V, INodeNear[K, V], NearestMap[K, V]] {
 
   def build(n: RBNode[K, V]) = NearestMap(n.asInstanceOf[RBNodeNear[K, V]])
 

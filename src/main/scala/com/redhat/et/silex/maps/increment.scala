@@ -61,8 +61,8 @@ object tree {
 import tree._
 
 object infra {
-  trait IncrementMapLike[K, V, M <: IncrementMapLike[K, V, M]] extends
-      OrderedMapLike[K, V, INodeInc[K, V], M] {
+  trait IncrementMapLike[K, V, IN <: INodeInc[K, V], M <: IncrementMapLike[K, V, IN, M]] extends
+      OrderedMapLike[K, V, IN, M] {
 
     val root: RBNodeInc[K, V]
 
@@ -75,7 +75,7 @@ object infra {
 import infra._
 
 case class IncrementMap[K, V](root: RBNodeInc[K, V]) extends
-    IncrementMapLike[K, V, IncrementMap[K, V]] {
+    IncrementMapLike[K, V, INodeInc[K, V], IncrementMap[K, V]] {
 
   def build(n: RBNode[K, V]) = IncrementMap(n.asInstanceOf[RBNodeInc[K, V]])
 
