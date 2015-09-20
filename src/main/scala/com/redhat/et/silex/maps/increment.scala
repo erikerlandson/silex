@@ -16,7 +16,7 @@
  * limitations under the License.c
  */
 
-package com.redhat.et.silex.maps.incrementing
+package com.redhat.et.silex.maps.increment
 
 import math.Ordering
 
@@ -61,7 +61,7 @@ object tree {
 import tree._
 
 object infra {
-  trait IncrementingMapLike[K, V, M <: IncrementingMapLike[K, V, M]] extends
+  trait IncrementMapLike[K, V, M <: IncrementMapLike[K, V, M]] extends
       OrderedMapLike[K, V, INodeInc[K, V], M] {
 
     val root: RBNodeInc[K, V]
@@ -74,18 +74,18 @@ object infra {
 
 import infra._
 
-case class IncrementingMap[K, V](root: RBNodeInc[K, V]) extends
-    IncrementingMapLike[K, V, IncrementingMap[K, V]] {
+case class IncrementMap[K, V](root: RBNodeInc[K, V]) extends
+    IncrementMapLike[K, V, IncrementMap[K, V]] {
 
-  def build(n: RBNode[K, V]) = IncrementingMap(n.asInstanceOf[RBNodeInc[K, V]])
+  def build(n: RBNode[K, V]) = IncrementMap(n.asInstanceOf[RBNodeInc[K, V]])
 
   override def toString =
-    "IncrementingMap(" +
+    "IncrementMap(" +
       nodesIterator.map(n => s"${n.key} -> ${n.value}").mkString(", ") +
     ")"
 }
 
-object IncrementingMap {
+object IncrementMap {
   class Reify[K, V](val keyOrdering: Ordering[K], val valueMonoid: Monoid[V]) {
     def rNode(k: K, v: V, ls: RBNode[K, V], rs: RBNode[K, V]) =
       new Reify[K, V](keyOrdering, valueMonoid) with RNodeInc[K, V] {
@@ -106,6 +106,6 @@ object IncrementingMap {
 
   def key[K](implicit ord: Ordering[K]) = new AnyRef {
     def value[V](implicit mon: Monoid[V]) =
-      IncrementingMap(new Reify[K, V](ord, mon) with LeafInc[K, V])
+      IncrementMap(new Reify[K, V](ord, mon) with LeafInc[K, V])
   }
 }
