@@ -27,13 +27,13 @@ object tree {
   trait RBNodeNear[K, V] extends RBNode[K, V] {
     val keyOrdering: Numeric[K] // <: Ordering[K]
 
-    def nearest(k: K): Set[(K, V)]
+    def nearest(k: K): Seq[(K, V)]
 
     final def dist(k1: K, k2: K) = keyOrdering.abs(keyOrdering.minus(k1, k2))
   }
 
   trait LeafNear[K, V] extends RBNodeNear[K, V] with Leaf[K, V] {
-    def nearest(k: K) = Set.empty[(K, V)]
+    def nearest(k: K) = Seq.empty[(K, V)]
   }
 
   trait INodeNear[K, V] extends RBNodeNear[K, V] with INode[K, V] {
@@ -50,12 +50,12 @@ object tree {
             if (keyOrdering.lteq(k, ls.kmax)) ls.nearest(k)
             else {
               val (dk, ldk) = (dist(k, key), dist(k, ls.kmax))
-              if (keyOrdering.lt(dk, ldk)) Set(((key, value)))
-              else if (keyOrdering.gt(dk, ldk)) Set(((ls.kmax, ls.node(ls.kmax).get.value)))
-              else Set(((key, value)), ((ls.kmax, ls.node(ls.kmax).get.value)))
+              if (keyOrdering.lt(dk, ldk)) Seq(((key, value)))
+              else if (keyOrdering.gt(dk, ldk)) Seq(((ls.kmax, ls.node(ls.kmax).get.value)))
+              else Seq(((ls.kmax, ls.node(ls.kmax).get.value)), ((key, value)))
             }
           }
-          case _ => Set(((key, value)))
+          case _ => Seq(((key, value)))
         }
       } else if (keyOrdering.gt(k, key)) {
         rsub match {
@@ -63,14 +63,14 @@ object tree {
             if (keyOrdering.gteq(k, rs.kmin)) rs.nearest(k)
             else {
               val (dk, rdk) = (dist(k, key), dist(k, rs.kmin))
-              if (keyOrdering.lt(dk, rdk)) Set(((key, value)))
-              else if (keyOrdering.gt(dk, rdk)) Set(((rs.kmin, rs.node(rs.kmin).get.value)))
-              else Set(((key, value)), ((rs.kmin, rs.node(rs.kmin).get.value)))
+              if (keyOrdering.lt(dk, rdk)) Seq(((key, value)))
+              else if (keyOrdering.gt(dk, rdk)) Seq(((rs.kmin, rs.node(rs.kmin).get.value)))
+              else Seq(((key, value)), ((rs.kmin, rs.node(rs.kmin).get.value)))
             }
           }
-          case _ => Set(((key, value)))
+          case _ => Seq(((key, value)))
         }
-      } else Set(((key, value)))
+      } else Seq(((key, value)))
     }
 
     override def toString = s"INodeNear($key, $value, $kmin, $kmax)"
