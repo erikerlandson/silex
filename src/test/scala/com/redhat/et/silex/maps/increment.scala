@@ -33,12 +33,15 @@ object IncrementMapProperties extends FlatSpec with Matchers {
     map: IncrementMapLike[K, V, IN, M]) {
     val mon = map.valueMonoid
 
+    // add values to themselves w.r.t. monoid
     val incTruth1 = data.map(_._2).zip(data.map(_._2)).map(x => mon.plus(x._1, x._2))
     val map1 = data.foldLeft(map)((m, e) => m.increment(e._1, e._2))
     map1.values should beEqSeq(incTruth1)
 
-    val data2 = data.map(_._1).zip(data.map(_._2).reverse)
-    val incTruth2 = data.map(_._2).zip(data.map(_._2).reverse).map(x => mon.plus(x._1, x._2))
+    // add values to a shuffle
+    val v2 = scala.util.Random.shuffle(data.map(_._2))
+    val data2 = data.map(_._1).zip(v2)
+    val incTruth2 = data.map(_._2).zip(v2).map(x => mon.plus(x._1, x._2))
     val map2 = data2.foldLeft(map)((m, e) => m.increment(e._1, e._2))
     map2.values should beEqSeq(incTruth2)
   }
@@ -59,7 +62,8 @@ class IncrementMapSpec extends FlatSpec with Matchers {
     val data = Vector.tabulate(50)(j => (j, j))
     (1 to 1000).foreach { u =>
       val shuffled = scala.util.Random.shuffle(data)
-      val map = shuffled.foldLeft(mapType1)((m, e) => m + e)
+      // incrementing new key is same as insertion:
+      val map = shuffled.foldLeft(mapType1)((m, e) => m.increment(e._1, e._2))
 
       testRB(map.root)
       testKV(data, map)
