@@ -154,7 +154,7 @@ class OrderedMapSpec extends FlatSpec with Matchers {
   }
 
   it should "pass randomized tree patterns" in {
-    val data = Vector.tabulate(100)(j => (j, j))
+    val data = Vector.tabulate(50)(j => (j, j))
     (1 to 1000).foreach { u =>
       val shuffled = scala.util.Random.shuffle(data)
       val omap = shuffled.foldLeft(mapType1)((m, e) => m + e)

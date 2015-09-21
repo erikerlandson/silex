@@ -55,7 +55,7 @@ class PrefixSumMapSpec extends FlatSpec with Matchers {
       .prefix(IncrementingMonoid.fromMonoid(implicitly[Monoid[Int]]))
 
   it should "pass randomized tree patterns" in {
-    val data = Vector.tabulate(100)(j => (j, j))
+    val data = Vector.tabulate(50)(j => (j, j))
     (1 to 1000).foreach { u =>
       val shuffled = scala.util.Random.shuffle(data)
       val psmap = shuffled.foldLeft(mapType1)((m, e) => m + e)
