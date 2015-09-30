@@ -117,6 +117,12 @@ import infra._
       val itr = valuesIterator.scanLeft(prefixMonoid.zero)((p, e) => prefixMonoid.inc(p, e))
       if (open) itr.takeWhile(_ => itr.hasNext) else itr.drop(1)
     }
+
+    /** equivalent to prefixSum of the right-most key */
+    def sum = this match {
+      case n: INodePS[K, V, P] => n.prefix
+      case _ => prefixMonoid.zero
+    }
   }
 
 sealed trait PrefixSumMap[K, V, P]
