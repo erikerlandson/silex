@@ -127,12 +127,6 @@ import infra._
   */
 trait OrderedLike[K, IN <: INode[K], M <: OrderedLike[K, IN, M]] extends Node[K] {
 
-  /** Returns true iff the container is empty */
-  def isEmpty = this match {
-    case n: LNode[K] => true
-    case _ => false
-  }
-
   /** Obtain a new container with key removed */
   def -(k: K) = this.delete(k).asInstanceOf[M]
 
@@ -162,7 +156,7 @@ trait OrderedLike[K, IN <: INode[K], M <: OrderedLike[K, IN, M]] extends Node[K]
   * @tparam M The map self-type of the concrete map subclass
   */
 trait OrderedSetLike[K, IN <: INode[K], M <: OrderedSetLike[K, IN, M]]
-    extends OrderedLike[K, IN, M] {
+    extends OrderedLike[K, IN, M] with Iterable[K] {
 
   /** Obtain a new container with key inserted */
   def +(k: K) = this.insert(
@@ -171,7 +165,7 @@ trait OrderedSetLike[K, IN <: INode[K], M <: OrderedSetLike[K, IN, M]]
     }).asInstanceOf[M]
 
   /** Iterator over keys, in key order */
-  def iterator = nodesIterator.map(_.data.key)
+  def iterator: Iterator[K] = nodesIterator.map(_.data.key)
 }
 
 /** An inheritable (and mixable) trait representing Ordered Map functionality that is 
@@ -182,7 +176,7 @@ trait OrderedSetLike[K, IN <: INode[K], M <: OrderedSetLike[K, IN, M]]
   * @tparam M The map self-type of the concrete map subclass
   */
 trait OrderedMapLike[K, V, IN <: INodeMap[K, V], M <: OrderedMapLike[K, V, IN, M]]
-    extends NodeMap[K, V] with OrderedLike[K, IN, M] {
+    extends NodeMap[K, V] with OrderedLike[K, IN, M] with Iterable[(K, V)] {
 
   /** Obtain a new map with a (key, val) pair inserted */
   def +(kv: (K, V)) = this.insert(
@@ -195,7 +189,7 @@ trait OrderedMapLike[K, V, IN <: INodeMap[K, V], M <: OrderedMapLike[K, V, IN, M
   def get(k: K) = this.getNode(k).map(_.data.value)
 
   /** Iterator over (key,val) pairs, in key order */
-  def iterator = nodesIterator.map(n => ((n.data.key, n.data.value)))
+  def iterator: Iterator[(K, V)] = nodesIterator.map(n => ((n.data.key, n.data.value)))
 
   /** Container of values, in key order */
   def values = valuesIterator.toIterable
