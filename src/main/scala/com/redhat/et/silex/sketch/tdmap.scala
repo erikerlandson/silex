@@ -31,15 +31,20 @@ object tree {
   import com.redhat.et.silex.maps.prefixsum.tree._
   import com.redhat.et.silex.maps.nearest.tree._
 
-  trait NodeTD[K, V, P] extends NodePS[K, V, P] with NodeInc[K, V] with NodeNearMap[K, V]
+  trait NodeTD extends NodePS[Double, Double, Double]
+      with NodeInc[Double, Double] with NodeNearMap[Double, Double] {
+  }
 
-  trait LNodeTD[K, V, P] extends NodeTD[K, V, P]
-      with LNodePS[K, V, P] with LNodeInc[K, V] with LNodeNearMap[K, V]
+  trait LNodeTD extends NodeTD
+      with LNodePS[Double, Double, Double] with LNodeInc[Double, Double]
+      with LNodeNearMap[Double, Double] {
+  }
 
-  trait INodeTD[K, V, P] extends NodeTD[K, V, P]
-      with INodePS[K, V, P] with INodeInc[K, V] with INodeNearMap[K, V] {
-    val lsub: NodeTD[K, V, P]
-    val rsub: NodeTD[K, V, P]
+  trait INodeTD extends NodeTD
+      with INodePS[Double, Double, Double] with INodeInc[Double, Double]
+      with INodeNearMap[Double, Double] {
+    val lsub: NodeTD
+    val rsub: NodeTD
   }
 }
 
@@ -49,28 +54,28 @@ object infra {
   import com.redhat.et.silex.maps.redblack.tree._
   import com.redhat.et.silex.maps.ordered.tree.DataMap
 
-  class Inject[K, V, P](
-    val keyOrdering: Numeric[K],
-    val valueMonoid: Monoid[V],
-    val prefixMonoid: IncrementingMonoid[P, V]) {
+  class Inject {
+    // I want to fix the typeclasses corresponding to "regular real numbers" here:
+    val keyOrdering = implicitly[Numeric[Double]]
+    val valueMonoid = implicitly[Monoid[Double]]
+    val prefixMonoid = IncrementingMonoid.fromMonoid[Double]
 
-    def iNode(clr: Color, dat: Data[K], ls: Node[K], rs: Node[K]) =
-      new Inject[K, V, P](keyOrdering, valueMonoid, prefixMonoid)
-          with INodeTD[K, V, P] with TDigestMap[K, V, P] {
-        // INode[K]
+    def iNode(clr: Color, dat: Data[Double], ls: Node[Double], rs: Node[Double]) =
+      new Inject with INodeTD with TDigestMap {
+        // INode
         val color = clr
-        val lsub = ls.asInstanceOf[NodeTD[K, V, P]]
-        val rsub = rs.asInstanceOf[NodeTD[K, V, P]]
-        val data = dat.asInstanceOf[DataMap[K, V]]
-        // INodePS[K, V, P]
+        val lsub = ls.asInstanceOf[NodeTD]
+        val rsub = rs.asInstanceOf[NodeTD]
+        val data = dat.asInstanceOf[DataMap[Double, Double]]
+        // INodePS
         val prefix = prefixMonoid.inc(prefixMonoid.plus(lsub.pfs, rsub.pfs), data.value)
-        // INodeNear[K, V]
+        // INodeNear
         val kmin = lsub match {
-          case n: INodeTD[K, V, P] => n.kmin
+          case n: INodeTD => n.kmin
           case _ => data.key
         }
         val kmax = rsub match {
-          case n: INodeTD[K, V, P] => n.kmax
+          case n: INodeTD => n.kmax
           case _ => data.key
         }
       }
@@ -80,10 +85,10 @@ object infra {
 
 import infra._
 
-sealed trait TDigestMap[K, V, P]
-  extends IncrementMapLike[K, V, INodeTD[K, V, P], TDigestMap[K, V, P]]
-  with PrefixSumMapLike[K, V, P, INodeTD[K, V, P], TDigestMap[K, V, P]]
-  with NearestMapLike[K, V, INodeTD[K, V, P], TDigestMap[K, V, P]] {
+sealed trait TDigestMap
+  extends IncrementMapLike[Double, Double, INodeTD, TDigestMap]
+  with PrefixSumMapLike[Double, Double, Double, INodeTD, TDigestMap]
+  with NearestMapLike[Double, Double, INodeTD, TDigestMap] {
 
   override def toString =
     "TDigestMap(" +
@@ -93,10 +98,5 @@ sealed trait TDigestMap[K, V, P]
 }
 
 object TDigestMap {
-  def key[K](implicit num: Numeric[K]) = new AnyRef {
-    def value[V](implicit vm: Monoid[V]) = new AnyRef {
-      def prefix[P](implicit im: IncrementingMonoid[P, V]): TDigestMap[K, V, P] =
-        new Inject[K, V, P](num, vm, im) with LNodeTD[K, V, P] with TDigestMap[K, V, P]
-    }
-  }
+  def empty = new Inject with LNodeTD with TDigestMap
 }

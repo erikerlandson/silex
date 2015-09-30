@@ -26,7 +26,7 @@ class TDigest(
   val K: Double,
   val n: Long,
   val nclusters: Int,
-  val clusters: TDigestMap[Double, Double, Double]) {
+  val clusters: TDigestMap) {
 
   private case class Cluster(centroid: Double, mass: Double, massUB: Double)
 
@@ -111,7 +111,6 @@ class TDigest(
 object TDigest {
   import scala.language.reflectiveCalls
   import com.twitter.algebird.Monoid
-  import com.redhat.et.silex.maps.prefixsum.IncrementingMonoid
 
   /** return an empty t-digest */
   def empty(
@@ -119,8 +118,7 @@ object TDigest {
     K: Double = 2.0) = {
     require(deltaInv >= 1.0, s"deltaInv= $deltaInv")
     require(K >= 1.0, s"K= $K")
-    val cmap = TDigestMap.key[Double].value[Double].prefix(IncrementingMonoid.fromMonoid[Double])
-    new TDigest(1.0 / deltaInv, K, 0L, 0, cmap)
+    new TDigest(1.0 / deltaInv, K, 0L, 0, TDigestMap.empty)
   }
 
   /** return a t-digest constructed from some data */
