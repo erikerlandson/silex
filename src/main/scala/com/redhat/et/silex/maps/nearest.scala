@@ -156,7 +156,8 @@ trait NearestSetLike[K, IN <: INodeNear[K], M <: NearestSetLike[K, IN, M]]
 
   /** Return entries nearest to a given key.  The sequence that is returned may
     * have zero, one or two elements.  If (k) is at the midpoint between two keys, the two 
-    * nearest will be returned.  If container is empty, an empty sequence will be returned.
+    * nearest will be returned (in key order).  If container is empty, an empty sequence
+    * will be returned.
     */
   def nearest(k: K) = this.near(k).map(_.data.key)
 }
@@ -172,7 +173,8 @@ trait NearestMapLike[K, V, IN <: INodeNearMap[K, V], M <: NearestMapLike[K, V, I
 
   /** Return entries nearest to a given key.  The sequence that is returned may
     * have zero, one or two elements.  If (k) is at the midpoint between two keys, the two 
-    * nearest will be returned.  If container is empty, an empty sequence will be returned.
+    * nearest will be returned (in key order).  If container is empty, an empty sequence
+    * will be returned.
     */
   def nearest(k: K) = this.near(k).map { n =>
     val dm = n.data.asInstanceOf[DataMap[K, V]]
