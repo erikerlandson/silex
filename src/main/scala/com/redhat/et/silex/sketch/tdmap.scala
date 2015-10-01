@@ -90,6 +90,38 @@ sealed trait TDigestMap
   with PrefixSumMapLike[Double, Double, Double, INodeTD, TDigestMap]
   with NearestMapLike[Double, Double, INodeTD, TDigestMap] {
 
+  def cdf[N](xx: N)(implicit num: Numeric[N]) = {
+    val x = num.toDouble(xx)
+    val adj = this.adjacent(x)
+    adj.length match {
+      case 0 => 0.0
+      case 1 => {
+        val (c, m) = adj(0)
+        // query x is either to the left of all clusters, or to the right of them,
+        // or is equal to one of them
+        if (x < c) 0.0
+        else if (x > c) 1.0
+        else {
+          val psum =
+            if (c == this.keyMax.get) this.prefixSum(c)
+            else this.prefixSum(c, open = true) + (m / 2.0)
+          psum / this.sum
+        }
+      }
+      case 2 => {
+        val (c1, tm1) = adj(0)
+        val (c2, tm2) = adj(1)
+        // query x is strictly between c1 and c2
+        val psum = this.prefixSum(c1, open = true)
+        val m1 = tm1 / 2.0
+        val m2 = (tm1 / 2.0) + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
+        val a = (x - c1) / (c2 - c1)
+        (psum + m1 + a * m2) / this.sum
+      }
+      case _ => throw new Exception(s"undefined adjacent return = $adj")
+    }
+  }
+
   override def toString =
     "TDigestMap(" +
       iterator.zip(prefixSumsIterator())
