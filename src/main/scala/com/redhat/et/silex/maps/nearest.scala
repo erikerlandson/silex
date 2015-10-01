@@ -170,6 +170,18 @@ trait NearestLike[K, IN <: INodeNear[K], M <: NearestLike[K, IN, M]]
 
   /** Obtain nodes adjacent to a key */
   def adjacentNodes(k: K) = this.adjc(k).map(_.asInstanceOf[IN])
+
+  /** Minimum key stored in this collection */
+  def keyMin: Option[K] = this match {
+    case n: INodeNear[K] => Some(n.kmin)
+    case _ => None
+  }
+
+  /** Maximum key stored in this collection */
+  def keyMax: Option[K] = this match {
+    case n: INodeNear[K] => Some(n.kmax)
+    case _ => None
+  }
 }
 
 /** An inheritable and mixable trait for adding nearest-key query to an ordered set
