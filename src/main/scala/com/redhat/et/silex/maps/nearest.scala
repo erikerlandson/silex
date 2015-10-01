@@ -32,7 +32,9 @@ object tree {
     val keyOrdering: Numeric[K] // <: Ordering[K]
 
     /** Obtain the nearest nodes to a given key */
-    private [nearest] def near(k: K): Seq[INodeNear[K]]
+    private[nearest] def near(k: K): Seq[INodeNear[K]]
+
+    private[nearest] def adjc(k: K): Seq[INodeNear[K]]
 
     private[tree] final def dist(k1: K, k2: K) = keyOrdering.abs(keyOrdering.minus(k1, k2))
   }
@@ -40,6 +42,7 @@ object tree {
   /** Leaf R/B tree nodes supporting nearest-key query */
   trait LNodeNear[K] extends NodeNear[K] with LNode[K] {
     final def near(k: K) = Seq.empty[INodeNear[K]]
+    final def adjc(k: K) = Seq.empty[INodeNear[K]]
   }
 
   /** Internal R/B tree nodes supporting nearest-key query */
@@ -49,6 +52,26 @@ object tree {
 
     val kmin: K
     val kmax: K
+
+    final def adjc(k: K) = {
+      if (keyOrdering.lt(k, data.key)) {
+        lsub match {
+          case ls: INodeNear[K] => {
+            if (keyOrdering.lteq(k, ls.kmax)) ls.adjc(k)
+            else Seq(ls.node(ls.kmax).get.asInstanceOf[INodeNear[K]], this)
+          }
+          case _ => Seq(this)
+        }
+      } else if (keyOrdering.gt(k, data.key)) {
+        rsub match {
+          case rs: INodeNear[K] => {
+            if (keyOrdering.gteq(k, rs.kmin)) rs.adjc(k)
+            else Seq(this, rs.node(rs.kmin).get.asInstanceOf[INodeNear[K]])
+          }
+          case _ => Seq(this)
+        }
+      } else Seq(this)
+    }
 
     final def near(k: K) = {
       if (keyOrdering.lt(k, data.key)) {
@@ -144,6 +167,9 @@ trait NearestLike[K, IN <: INodeNear[K], M <: NearestLike[K, IN, M]]
 
   /** Obtain the nodes nearest to a key */
   def nearestNodes(k: K) = this.near(k).map(_.asInstanceOf[IN])
+
+  /** Obtain nodes adjacent to a key */
+  def adjacentNodes(k: K) = this.adjc(k).map(_.asInstanceOf[IN])
 }
 
 /** An inheritable and mixable trait for adding nearest-key query to an ordered set
@@ -160,6 +186,8 @@ trait NearestSetLike[K, IN <: INodeNear[K], M <: NearestSetLike[K, IN, M]]
     * will be returned.
     */
   def nearest(k: K) = this.near(k).map(_.data.key)
+
+  def adjacent(k: K) = this.adjc(k).map(_.data.key)
 }
 
 /** An inheritable and mixable trait for adding nearest-key query to an ordered map
@@ -177,6 +205,11 @@ trait NearestMapLike[K, V, IN <: INodeNearMap[K, V], M <: NearestMapLike[K, V, I
     * will be returned.
     */
   def nearest(k: K) = this.near(k).map { n =>
+    val dm = n.data.asInstanceOf[DataMap[K, V]]
+    (dm.key, dm.value)
+  }
+
+  def adjacent(k: K) = this.adjc(k).map { n =>
     val dm = n.data.asInstanceOf[DataMap[K, V]]
     (dm.key, dm.value)
   }
