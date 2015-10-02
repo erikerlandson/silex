@@ -92,33 +92,28 @@ sealed trait TDigestMap
 
   def cdf[N](xx: N)(implicit num: Numeric[N]) = {
     val x = num.toDouble(xx)
-    val adj = this.adjacent(x)
-    adj.length match {
-      case 0 => 0.0
-      case 1 => {
-        val (c, m) = adj(0)
-        // query x is either to the left of all clusters, or to the right of them,
-        // or is equal to one of them
-        if (x < c) 0.0
-        else if (x > c) 1.0
-        else {
-          val psum =
-            if (c == this.keyMax.get) this.prefixSum(c)
-            else this.prefixSum(c, open = true) + (m / 2.0)
-          psum / this.sum
-        }
-      }
-      case 2 => {
-        val (c1, tm1) = adj(0)
-        val (c2, tm2) = adj(1)
-        // query x is strictly between c1 and c2
+    this.coverR(x) match {
+      case Cover(Some((c1, tm1)), Some((c2, tm2))) => {
         val psum = this.prefixSum(c1, open = true)
-        val m1 = tm1 / 2.0
-        val m2 = (tm1 / 2.0) + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
+        val (m1, t) = if (c1 == this.keyMin.get) (0.0, tm1) else (tm1 / 2.0, tm1 / 2.0)
+        val m2 = t + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
         val a = (x - c1) / (c2 - c1)
         (psum + m1 + a * m2) / this.sum
       }
-      case _ => throw new Exception(s"undefined adjacent return = $adj")
+      case Cover(Some(_), None) => 1.0
+      case _ => 0.0
+    }
+  }
+
+  def pdf[N](xx: N)(implicit num: Numeric[N]) = {
+    val x = num.toDouble(xx)
+    this.coverR(x) match {
+      case Cover(Some((c1, tm1)), Some((c2, tm2))) => {
+        val (m1, t) = if (c1 == this.keyMin.get) (0.0, tm1) else (tm1 / 2.0, tm1 / 2.0)
+        val m2 = t + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
+        m2 / this.sum / (c2 - c1)
+      }
+      case _ => 0.0
     }
   }
 
