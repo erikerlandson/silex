@@ -23,6 +23,10 @@ import com.redhat.et.silex.maps.redblack.tree._
 import com.redhat.et.silex.maps.ordered._
 import com.redhat.et.silex.maps.ordered.tree.DataMap
 
+case class Cover[T](l: Option[T], r: Option[T]) {
+  def map[U](f: T => U) = Cover(l.map(f), r.map(f))
+}
+
 object tree {
   import com.redhat.et.silex.maps.ordered.tree._
 
@@ -36,6 +40,9 @@ object tree {
 
     private[nearest] def adjc(k: K): Seq[INodeNear[K]]
 
+    private[nearest] def covL(k: K): Cover[INodeNear[K]]
+    private[nearest] def covR(k: K): Cover[INodeNear[K]]
+
     private[tree] final def dist(k1: K, k2: K) = keyOrdering.abs(keyOrdering.minus(k1, k2))
   }
 
@@ -43,6 +50,8 @@ object tree {
   trait LNodeNear[K] extends NodeNear[K] with LNode[K] {
     final def near(k: K) = Seq.empty[INodeNear[K]]
     final def adjc(k: K) = Seq.empty[INodeNear[K]]
+    final def covL(k: K) = Cover(None, None)
+    final def covR(k: K) = Cover(None, None)
   }
 
   /** Internal R/B tree nodes supporting nearest-key query */
@@ -52,6 +61,46 @@ object tree {
 
     val kmin: K
     val kmax: K
+
+    final def covL(k: K) = {
+      if (keyOrdering.lteq(k, data.key)) {
+        lsub match {
+          case ls: INodeNear[K] => {
+            if (keyOrdering.lteq(k, ls.kmax)) ls.covL(k)
+            else Cover(Some(ls.node(ls.kmax).get.asInstanceOf[INodeNear[K]]), Some(this))
+          }
+          case _ => Cover(None, Some(this))
+        }
+      } else { // keyOrdering.gt(k, data.key)
+        rsub match {
+          case rs: INodeNear[K] => {
+            if (keyOrdering.gt(k, rs.kmin)) rs.covL(k)
+            else Cover(Some(this), Some(rs.node(rs.kmin).get.asInstanceOf[INodeNear[K]]))
+          }
+          case _ => Cover(Some(this), None)
+        }
+      }
+    }
+
+    final def covR(k: K) = {
+      if (keyOrdering.lt(k, data.key)) {
+        lsub match {
+          case ls: INodeNear[K] => {
+            if (keyOrdering.lt(k, ls.kmax)) ls.covR(k)
+            else Cover(Some(ls.node(ls.kmax).get.asInstanceOf[INodeNear[K]]), Some(this))
+          }
+          case _ => Cover(None, Some(this))
+        }
+      } else { // keyOrdering.gteq(k, data.key)
+        rsub match {
+          case rs: INodeNear[K] => {
+            if (keyOrdering.gteq(k, rs.kmin)) rs.covR(k)
+            else Cover(Some(this), Some(rs.node(rs.kmin).get.asInstanceOf[INodeNear[K]]))
+          }
+          case _ => Cover(Some(this), None)
+        }
+      }
+    }
 
     final def adjc(k: K) = {
       if (keyOrdering.lt(k, data.key)) {
@@ -171,6 +220,9 @@ trait NearestLike[K, IN <: INodeNear[K], M <: NearestLike[K, IN, M]]
   /** Obtain nodes adjacent to a key */
   def adjacentNodes(k: K) = this.adjc(k).map(_.asInstanceOf[IN])
 
+  def coverLNodes(k: K) = this.covL(k)
+  def coverRNodes(k: K) = this.covR(k)
+
   /** Minimum key stored in this collection */
   def keyMin: Option[K] = this match {
     case n: INodeNear[K] => Some(n.kmin)
@@ -200,6 +252,9 @@ trait NearestSetLike[K, IN <: INodeNear[K], M <: NearestSetLike[K, IN, M]]
   def nearest(k: K) = this.near(k).map(_.data.key)
 
   def adjacent(k: K) = this.adjc(k).map(_.data.key)
+
+  def coverL(k: K) = this.covL(k).map(_.data.key)
+  def coverR(k: K) = this.covR(k).map(_.data.key)
 }
 
 /** An inheritable and mixable trait for adding nearest-key query to an ordered map
@@ -222,6 +277,15 @@ trait NearestMapLike[K, V, IN <: INodeNearMap[K, V], M <: NearestMapLike[K, V, I
   }
 
   def adjacent(k: K) = this.adjc(k).map { n =>
+    val dm = n.data.asInstanceOf[DataMap[K, V]]
+    (dm.key, dm.value)
+  }
+
+  def coverL(k: K) = this.covL(k).map { n =>
+    val dm = n.data.asInstanceOf[DataMap[K, V]]
+    (dm.key, dm.value)
+  }
+  def coverR(k: K) = this.covR(k).map { n =>
     val dm = n.data.asInstanceOf[DataMap[K, V]]
     (dm.key, dm.value)
   }
