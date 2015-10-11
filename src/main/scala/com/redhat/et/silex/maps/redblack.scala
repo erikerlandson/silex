@@ -52,6 +52,9 @@ object tree {
     /** Obtain the node stored at a given key if it exists, None otherwise */
     def node(k: K): Option[INode[K]]
 
+    def nodeMin: Option[INode[K]]
+    def nodeMax: Option[INode[K]]
+
     // internal
     private [tree] def ins(d: Data[K]): Node[K]
     private [tree] def del(k: K): Node[K]
@@ -151,6 +154,9 @@ object tree {
   trait LNode[K] extends Node[K] {
     final def node(k: K) = None
 
+    final def nodeMin = None
+    final def nodeMax = None
+
     final def ins(d: Data[K]) = rNode(d, this, this)
     final def del(k: K) = this
   }
@@ -174,6 +180,16 @@ object tree {
       if (keyOrdering.lt(k, data.key)) lsub.node(k)
       else if (keyOrdering.gt(k, data.key)) rsub.node(k)
       else Some(this)
+
+    final def nodeMin = lsub match {
+      case LNode() => Some(this)
+      case _ => lsub.nodeMin
+    }
+
+    final def nodeMax = rsub match {
+      case LNode() => Some(this)
+      case _ => rsub.nodeMax
+    }
 
     final def del(k: K) =
       if (keyOrdering.lt(k, data.key)) delLeft(this, k)
