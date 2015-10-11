@@ -33,11 +33,19 @@ object tree {
 
   trait NodeTD extends NodePS[Double, Double, Double]
       with NodeInc[Double, Double] with NodeNearMap[Double, Double] {
+
+    def qCover(q: Double) = this match {
+      case n: INodeTD => qcov(q * n.prefix, 0.0, Cover[INodeTD](None, None))
+      case _ => Cover[INodeTD](None, None)
+    }
+
+    def qcov(q: Double, psum: Double, cov: Cover[INodeTD]): Cover[INodeTD]
   }
 
   trait LNodeTD extends NodeTD
       with LNodePS[Double, Double, Double] with LNodeInc[Double, Double]
       with LNodeNearMap[Double, Double] {
+    def qcov(q: Double, psum: Double, cov: Cover[INodeTD]) = cov
   }
 
   trait INodeTD extends NodeTD
@@ -45,6 +53,20 @@ object tree {
       with INodeNearMap[Double, Double] {
     val lsub: NodeTD
     val rsub: NodeTD
+
+    def qcov(q: Double, psum: Double, cov: Cover[INodeTD]) = {
+      if (q <= lsub.pfs) lsub.qcov(q, psum, cov.copy(r = Some(this)))
+      else {
+        val t = psum + lsub.pfs + data.value
+        if (q >= t) rsub.qcov(q, t, cov.copy(l = Some(this)))
+        else {
+          lsub match {
+            case n: INodeTD => Cover(Some(lsub.nodeMax.get.asInstanceOf[INodeTD]), Some(this))
+            case _ => cov.copy(r = Some(this))
+          }
+        }
+      }
+    }
   }
 }
 
@@ -86,7 +108,7 @@ object infra {
 import infra._
 
 sealed trait TDigestMap
-  extends IncrementMapLike[Double, Double, INodeTD, TDigestMap]
+  extends NodeTD with IncrementMapLike[Double, Double, INodeTD, TDigestMap]
   with PrefixSumMapLike[Double, Double, Double, INodeTD, TDigestMap]
   with NearestMapLike[Double, Double, INodeTD, TDigestMap] {
 
