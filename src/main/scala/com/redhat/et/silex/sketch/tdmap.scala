@@ -34,18 +34,15 @@ object tree {
   trait NodeTD extends NodePS[Double, Double, Double]
       with NodeInc[Double, Double] with NodeNearMap[Double, Double] {
 
-    final def qCover(q: Double) = this match {
-      case n: INodeTD => qcov(q * n.prefix, 0.0, Cover[INodeTD](None, None))
-      case _ => Cover[INodeTD](None, None)
-    }
+    final def mCover(m: Double) = mcov(m, 0.0, Cover[INodeTD](None, None))
 
-    def qcov(q: Double, psum: Double, cov: Cover[INodeTD]): Cover[INodeTD]
+    def mcov(m: Double, psum: Double, cov: Cover[INodeTD]): Cover[INodeTD]
   }
 
   trait LNodeTD extends NodeTD
       with LNodePS[Double, Double, Double] with LNodeInc[Double, Double]
       with LNodeNearMap[Double, Double] {
-    final def qcov(q: Double, psum: Double, cov: Cover[INodeTD]) = cov
+    final def mcov(m: Double, psum: Double, cov: Cover[INodeTD]) = cov
   }
 
   trait INodeTD extends NodeTD
@@ -54,11 +51,16 @@ object tree {
     val lsub: NodeTD
     val rsub: NodeTD
 
-    final def qcov(q: Double, psum: Double, cov: Cover[INodeTD]) = {
-      if (q <= lsub.pfs) lsub.qcov(q, psum, cov.copy(r = Some(this)))
-      else {
+    final def mcov(m: Double, psum: Double, cov: Cover[INodeTD]) = {
+      if (m < psum + lsub.pfs) {
+        lsub match {
+          case n: INodeTD =>
+            lsub.mcov(m, psum, cov.copy(r = Some(n.nodeMax.get.asInstanceOf[INodeTD])))
+          case _ => cov.copy(r = Some(this))
+        }
+      } else {
         val t = psum + lsub.pfs + data.value
-        if (q >= t) rsub.qcov(q, t, cov.copy(l = Some(this)))
+        if (m >= t) rsub.mcov(m, t, cov.copy(l = Some(this)))
         else {
           lsub match {
             case n: INodeTD => Cover(Some(lsub.nodeMax.get.asInstanceOf[INodeTD]), Some(this))
