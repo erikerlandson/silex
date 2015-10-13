@@ -79,7 +79,7 @@ object infra {
   import com.redhat.et.silex.maps.ordered.tree.DataMap
 
   class Inject {
-    // I want to fix the typeclasses corresponding to "regular real numbers" here:
+    // Typeclasses corresponding to "regular real numbers":
     val keyOrdering = implicitly[Numeric[Double]]
     val valueMonoid = implicitly[Monoid[Double]]
     val prefixMonoid = IncrementingMonoid.fromMonoid[Double]
@@ -136,7 +136,6 @@ sealed trait TDigestMap extends NodeTD
     val m2 = m1 + (tm1 - d1) + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
     val g = (c2 - c1) / (m2 - m1)
     val r = c1 + (m - m1) * g
-    println(s"($c1, $m1) ($c2, $m2) m= $m  s= $s  g= $g  r= $r")
     r
   }
 
