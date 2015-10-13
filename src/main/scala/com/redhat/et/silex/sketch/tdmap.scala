@@ -129,6 +129,34 @@ sealed trait TDigestMap extends NodeTD
     }
   }
 
+  private def cdfI(m: Double, c1: Double, tm1: Double, c2: Double, tm2: Double) = {
+    val s = this.prefixSum(c1, open = true)
+    val d1 = if (c1 == this.keyMin.get) 0.0 else tm1 / 2.0
+    val m1 = s + d1
+    val m2 = m1 + (tm1 - d1) + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
+    val g = (c2 - c1) / (m2 - m1)
+    val r = c1 + (m - m1) * g
+    println(s"($c1, $m1) ($c2, $m2) m= $m  s= $s  g= $g  r= $r")
+    r
+  }
+
+  def cdfInverse[N](qq: N)(implicit num: Numeric[N]) = {
+    val q = num.toDouble(qq)
+    if (q < 0.0 || q > 1.0) Double.NaN
+    else {
+      val m = q * this.sum
+      this.mCover(m).map(n => (n.data.key, n.data.value)) match {
+        case Cover(Some((c1, tm1)), Some((c2, tm2))) => cdfI(m, c1, tm1, c2, tm2)
+        case Cover(None, Some((c, _))) => this.coverR(c) match {
+          case Cover(Some((c1, tm1)), Some((c2, tm2))) => cdfI(m, c1, tm1, c2, tm2)
+          case _ => Double.NaN
+        }
+        case Cover(Some((c, _)), None) => c
+        case _ => Double.NaN
+      }
+    }
+  }
+
   def pdf[N](xx: N)(implicit num: Numeric[N]) = {
     val x = num.toDouble(xx)
     this.coverR(x) match {
