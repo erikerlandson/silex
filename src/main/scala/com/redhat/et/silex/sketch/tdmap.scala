@@ -114,32 +114,32 @@ sealed trait TDigestMap extends NodeTD
   with PrefixSumMapLike[Double, Double, Double, INodeTD, TDigestMap]
   with NearestMapLike[Double, Double, INodeTD, TDigestMap] {
 
+  private def m1m2(c1: Double, tm1: Double, c2: Double, tm2: Double) = {
+    val s = this.prefixSum(c1, open = true)
+    val d1 = if (c1 == this.keyMin.get) 0.0 else tm1 / 2.0
+    val m1 = s + d1
+    val m2 = m1 + (tm1 - d1) + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
+    (m1, m2)
+  }
+
   def cdf[N](xx: N)(implicit num: Numeric[N]) = {
     val x = num.toDouble(xx)
     this.coverR(x) match {
       case Cover(Some((c1, tm1)), Some((c2, tm2))) => {
-        val psum = this.prefixSum(c1, open = true)
-        val (m1, t) = if (c1 == this.keyMin.get) (0.0, tm1) else (tm1 / 2.0, tm1 / 2.0)
-        val m2 = t + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
-        val a = (x - c1) / (c2 - c1)
-        (psum + m1 + a * m2) / this.sum
+        val (m1, m2) = m1m2(c1, tm1, c2, tm2)
+        (m1 + (x - c1) * (m2 - m1) / (c2 - c1)) / this.sum
       }
       case Cover(Some(_), None) => 1.0
       case _ => 0.0
     }
   }
 
-  private def cdfI(m: Double, c1: Double, tm1: Double, c2: Double, tm2: Double) = {
-    val s = this.prefixSum(c1, open = true)
-    val d1 = if (c1 == this.keyMin.get) 0.0 else tm1 / 2.0
-    val m1 = s + d1
-    val m2 = m1 + (tm1 - d1) + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
-    val g = (c2 - c1) / (m2 - m1)
-    val r = c1 + (m - m1) * g
-    r
-  }
-
   def cdfInverse[N](qq: N)(implicit num: Numeric[N]) = {
+    def cdfI(m: Double, c1: Double, tm1: Double, c2: Double, tm2: Double) = {
+      val (m1, m2) = m1m2(c1, tm1, c2, tm2)
+      c1 + (m - m1) * (c2 - c1) / (m2 - m1)
+    }
+
     val q = num.toDouble(qq)
     if (q < 0.0 || q > 1.0) Double.NaN
     else {
@@ -160,9 +160,8 @@ sealed trait TDigestMap extends NodeTD
     val x = num.toDouble(xx)
     this.coverR(x) match {
       case Cover(Some((c1, tm1)), Some((c2, tm2))) => {
-        val (m1, t) = if (c1 == this.keyMin.get) (0.0, tm1) else (tm1 / 2.0, tm1 / 2.0)
-        val m2 = t + (if (c2 == this.keyMax.get) tm2 else tm2 / 2.0)
-        m2 / this.sum / (c2 - c1)
+        val (m1, m2) = m1m2(c1, tm1, c2, tm2)
+        (m2 - m1) / (c2 - c1) / this.sum
       }
       case _ => 0.0
     }
