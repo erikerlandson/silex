@@ -38,8 +38,6 @@ object tree {
     /** Obtain the nearest nodes to a given key */
     private[nearest] def near(k: K): Seq[INodeNear[K]]
 
-    private[nearest] def adjc(k: K): Seq[INodeNear[K]]
-
     private[nearest] def covL(k: K): Cover[INodeNear[K]]
     private[nearest] def covR(k: K): Cover[INodeNear[K]]
 
@@ -49,7 +47,6 @@ object tree {
   /** Leaf R/B tree nodes supporting nearest-key query */
   trait LNodeNear[K] extends NodeNear[K] with LNode[K] {
     final def near(k: K) = Seq.empty[INodeNear[K]]
-    final def adjc(k: K) = Seq.empty[INodeNear[K]]
     final def covL(k: K) = Cover(None, None)
     final def covR(k: K) = Cover(None, None)
   }
@@ -100,26 +97,6 @@ object tree {
           case _ => Cover(Some(this), None)
         }
       }
-    }
-
-    final def adjc(k: K) = {
-      if (keyOrdering.lt(k, data.key)) {
-        lsub match {
-          case ls: INodeNear[K] => {
-            if (keyOrdering.lteq(k, ls.kmax)) ls.adjc(k)
-            else Seq(ls.node(ls.kmax).get.asInstanceOf[INodeNear[K]], this)
-          }
-          case _ => Seq(this)
-        }
-      } else if (keyOrdering.gt(k, data.key)) {
-        rsub match {
-          case rs: INodeNear[K] => {
-            if (keyOrdering.gteq(k, rs.kmin)) rs.adjc(k)
-            else Seq(this, rs.node(rs.kmin).get.asInstanceOf[INodeNear[K]])
-          }
-          case _ => Seq(this)
-        }
-      } else Seq(this)
     }
 
     final def near(k: K) = {
@@ -217,9 +194,6 @@ trait NearestLike[K, IN <: INodeNear[K], M <: NearestLike[K, IN, M]]
   /** Obtain the nodes nearest to a key */
   def nearestNodes(k: K) = this.near(k).map(_.asInstanceOf[IN])
 
-  /** Obtain nodes adjacent to a key */
-  def adjacentNodes(k: K) = this.adjc(k).map(_.asInstanceOf[IN])
-
   def coverLNodes(k: K) = this.covL(k)
   def coverRNodes(k: K) = this.covR(k)
 
@@ -251,8 +225,6 @@ trait NearestSetLike[K, IN <: INodeNear[K], M <: NearestSetLike[K, IN, M]]
     */
   def nearest(k: K) = this.near(k).map(_.data.key)
 
-  def adjacent(k: K) = this.adjc(k).map(_.data.key)
-
   def coverL(k: K) = this.covL(k).map(_.data.key)
   def coverR(k: K) = this.covR(k).map(_.data.key)
 }
@@ -272,11 +244,6 @@ trait NearestMapLike[K, V, IN <: INodeNearMap[K, V], M <: NearestMapLike[K, V, I
     * will be returned.
     */
   def nearest(k: K) = this.near(k).map { n =>
-    val dm = n.data.asInstanceOf[DataMap[K, V]]
-    (dm.key, dm.value)
-  }
-
-  def adjacent(k: K) = this.adjc(k).map { n =>
     val dm = n.data.asInstanceOf[DataMap[K, V]]
     (dm.key, dm.value)
   }
