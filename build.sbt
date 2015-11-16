@@ -16,6 +16,7 @@ def commonSettings = Seq(
     "org.apache.spark" %% "spark-sql" % SPARK_VERSION % "provided",
     "org.apache.spark" %% "spark-mllib" % SPARK_VERSION % "provided",
     "org.apache.commons" % "commons-math3" % "3.5",
+    "com.quantifind" %% "wisp" % "0.0.5-SNAPSHOT",
     "io.continuum.bokeh" %% "bokeh" % "0.6",
     "com.freevariable" %% "firkin" % "0.3.0",
     "com.freevariable" %% "firkin-client" % "0.3.0",
