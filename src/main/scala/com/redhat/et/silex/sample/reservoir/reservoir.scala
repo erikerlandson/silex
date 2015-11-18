@@ -1,6 +1,8 @@
 
 object reservoir {
+  import scala.reflect.ClassTag
   import org.apache.commons.math3.util.CombinatoricsUtils._
+  import com.redhat.et.silex.util.OptionalArg
 
   def pmf(R: Int, j: Int)(k: Int): Double = {
     val log = math.log(R) - math.log(j) + 
@@ -26,10 +28,23 @@ object reservoir {
     1.0 - math.pow(1.0 - p, k + 1)
   }
 
-  def ksD(R: Int, j: Int, n: Int = 10000000) = {
-    val d1 = cdf(R, j)_
-    val d2 = cdfG(R, j)_
-    (0 to n).iterator.map(k => math.abs(d1(k) - d2(k))).max
+  def ksD(R: Int, j: Int) = {
+    def nD(R: Int, j: Int, n0: Int, n1: Int) = {
+      val d1 = cdf(R, j)_
+      val d2 = cdfG(R, j)_
+      (n0 to n1).iterator.map(k => math.abs(d1(k) - d2(k))).max
+    }
+    var nprv = 0
+    var ncur = R * 2
+    var prvD = -2.0
+    var curD = -1.0
+    while (curD != prvD) {
+      prvD = curD
+      curD = math.max(curD, nD(R, j, nprv, ncur))
+      nprv = ncur
+      ncur = (ncur * 1.5).toInt
+    }
+    curD
   }
 
   def inverseCDFSampler(cdf: Int => Double) = new Iterator[Int] {
@@ -73,4 +88,79 @@ object reservoir {
     (ss, pval)
   }
 
+  def dropFunction[T :ClassTag](itr: Iterator[T]) = {
+    val arrayClass = Array.empty[T].iterator.getClass
+    val arrayBufferClass = scala.collection.mutable.ArrayBuffer.empty[T].iterator.getClass
+    val vectorClass = Vector.empty[T].iterator.getClass
+    itr.getClass match {
+      case `arrayClass` =>
+        (data: Iterator[T], n: Int) => data.drop(n)
+      case `arrayBufferClass` =>
+        (data: Iterator[T], n: Int) => data.drop(n)
+      case `vectorClass` =>
+        (data: Iterator[T], n: Int) => data.drop(n)
+      case _ =>
+        (data: Iterator[T], n: Int) => {
+          var j = 0
+          while (j < n && data.hasNext) {
+            data.next()
+            j += 1
+          }
+          data
+        }
+     }
+   }
+
+  def reservoir[T :ClassTag](dataTO: TraversableOnce[T], R: Int) = {
+    val data = dataTO.toIterator
+    val res = Array.fill(R) { data.next }
+    var j = 1 + R
+    while (data.hasNext) {
+      val v = data.next
+      val k = scala.util.Random.nextInt(j)
+      if (k < R) res(k) = v
+      j += 1
+    }
+    res.toVector
+  }
+
+  val rngEpsilon = 5e-11
+
+  def reservoirFast[T :ClassTag](dataTO: TraversableOnce[T], R: Int, jf: Int = 4) = {
+    var data = dataTO.toIterator
+    val res = Array.fill(R) { data.next }
+    var j = 1 + R
+    val jt = R * jf
+    // The naive method is faster until (R/j) becomes small enough
+    while (data.hasNext && j <= jt) {
+      val v = data.next
+      val k = scala.util.Random.nextInt(j)
+      if (k < R) res(k) = v
+      j += 1
+    }
+    val drop = dropFunction(data)
+    // Once gaps become significant, it pays to do gap sampling
+    while (data.hasNext) {
+      val p = R.toDouble / j.toDouble
+      val lnq = math.log1p(-p)
+      val u = math.max(scala.util.Random.nextDouble(), rngEpsilon)
+      val g = (math.log(u) / lnq).toInt
+      data = drop(data, g)
+      if (data.hasNext) {
+        val v = data.next
+        val k = scala.util.Random.nextInt(R)
+        res(k) = v
+      }
+      j += (g + 1)
+    }
+    res.toVector
+  }
+
+  def benchmark[T](label: String)(blk: => T) = {
+    val t0 = System.nanoTime
+    val t = blk
+    val sec = (System.nanoTime - t0) / 1e9
+    println(f"Run time for $label = $sec%.3g sec"); System.out.flush
+    (sec, t)
+  }
 }
