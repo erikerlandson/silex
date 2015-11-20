@@ -156,11 +156,58 @@ object reservoir {
     res.toVector
   }
 
-  def benchmark[T](label: String)(blk: => T) = {
-    val t0 = System.nanoTime
-    val t = blk
-    val sec = (System.nanoTime - t0) / 1e9
-    println(f"Run time for $label = $sec%.3g sec"); System.out.flush
-    (sec, t)
+  def naiveGaps(n: Int, R: Int) =
+    SamplingIterator {
+      reservoir((0 until n), R).sorted.iterator.sliding(2).map(s => s(1)-s(0)).toVector
+    }
+
+  def fastGaps(n: Int, R: Int) =
+    SamplingIterator {
+      reservoirFast((0 until n), R).sorted.iterator.sliding(2).map(s => s(1)-s(0)).toVector
+    }
+
+  def naiveFastD(n: Int, R: Int, ss: Int) = {
+    val naiveDist = naiveGaps(n, R).map(_.toDouble)
+    val fastDist = fastGaps(n, R).map(_.toDouble)
+    val ks = new org.apache.commons.math3.stat.inference.KolmogorovSmirnovTest()
+    ks.kolmogorovSmirnovStatistic(
+      Array.fill(ss) { naiveDist.next },
+      Array.fill(ss) { fastDist.next })
+  }
+
+  def benchmark[U](k: Int, trim: Int = 1)(blk: => U) = {
+    Vector.fill(k + 2 * trim) {
+      val t0 = System.nanoTime
+      blk
+      (System.nanoTime - t0) / 1e9
+    }.sorted.slice(trim, k + trim)
+  }
+
+  class SamplingIterator[T](dataBlock: => Traversable[T]) extends Iterator[T] with Serializable {
+    var data = Iterator.continually(()).flatMap { u => dataBlock }
+
+    def hasNext = data.hasNext
+    def next = data.next
+
+    override def filter(f: T => Boolean) = new SamplingIterator(data.filter(f).toStream)
+    override def map[U](f: T => U) = new SamplingIterator(data.map(f).toStream)
+    override def flatMap[U](f: T => scala.collection.GenTraversableOnce[U]) =
+      new SamplingIterator(data.flatMap(f).toStream)
+
+    def sample(n: Int) = Vector.fill(n) { data.next }
+
+    def fork = {
+      val (dup1, dup2) = data.duplicate
+      data = dup1
+      new SamplingIterator(dup2.toStream)
+    }
+  }
+
+  object SamplingIterator {
+    def apply[T](data: => Traversable[T]) = new SamplingIterator(data)
+    def continually[T](value: => T) = new SamplingIterator(Stream.continually(value))
+    implicit class ToSamplingIterator[T](data: TraversableOnce[T]) {
+      def toSamplingIterator = new SamplingIterator(data.toStream)
+    }
   }
 }
