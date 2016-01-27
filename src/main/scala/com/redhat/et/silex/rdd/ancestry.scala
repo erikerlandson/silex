@@ -16,7 +16,7 @@
  * limitations under the License.c
  */
 
-package com.redhat.et.silex.rdd
+package com.redhat.et.silex.rdd.ancestry
 
 import scala.reflect.ClassTag
 
@@ -45,7 +45,7 @@ class AncestryRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Seria
   }
 }
 
-object AncestryRDDFunctions {
+object implicits {
   import scala.language.implicitConversions
   implicit def fromRDD[T :ClassTag](rdd: RDD[T]): AncestryRDDFunctions[T] =
     new AncestryRDDFunctions(rdd)

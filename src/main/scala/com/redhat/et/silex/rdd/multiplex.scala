@@ -16,7 +16,7 @@
  * limitations under the License.c
  */
 
-package com.redhat.et.silex.rdd
+package com.redhat.et.silex.rdd.multiplex
 
 import scala.reflect.ClassTag
 
@@ -25,6 +25,8 @@ import org.apache.spark.{SparkContext, Logging, Partition, TaskContext,
                          Dependency, NarrowDependency, OneToOneDependency}
 
 import org.apache.spark.storage.StorageLevel
+
+import com.redhat.et.silex.rdd.util
 
 class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializable {
   import MuxRDDFunctions.defaultSL
@@ -206,10 +208,12 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
 }
 
 object MuxRDDFunctions {
-  import scala.language.implicitConversions
-  implicit def rddToMuxRDD[T :ClassTag](rdd: RDD[T]): MuxRDDFunctions[T] = new MuxRDDFunctions(rdd)
-
   private val defaultSL = StorageLevel.MEMORY_ONLY
+}
+
+object implicits {
+  import scala.language.implicitConversions
+  implicit def fromRDD[T :ClassTag](rdd: RDD[T]): MuxRDDFunctions[T] = new MuxRDDFunctions(rdd)
 
   def benchmark[T](label: String)(blk: => T) = {
     val t0 = System.nanoTime
