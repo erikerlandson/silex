@@ -26,25 +26,6 @@ import org.apache.spark.{SparkContext, Logging, Partition, TaskContext,
 
 import com.redhat.et.silex.rdd.util
 
-class MappedPartition[T :ClassTag, U :ClassTag](rdd: RDD[T], p: Partition, f: Iterator[T] => U) extends Partition {
-  var u: Option[U] = None
-  override def index = p.index
-  def compute(ctx: TaskContext): Iterator[U] = {
-    if (u.isEmpty) {
-      u = Some(f(rdd.iterator(p, ctx)))
-    }
-    Iterator(u.get)
-  }
-}
-
-class PartitionMappedRDD[T :ClassTag, U :ClassTag](rdd: RDD[T], f: Iterator[T] => U) extends
-  RDD[U](rdd) {
-  override val partitioner = rdd.partitioner
-  override def getPartitions = rdd.partitions.map { p => new MappedPartition(rdd, p, f) }
-  override def compute(p: Partition, ctx: TaskContext): Iterator[U] =
-    p.asInstanceOf[MappedPartition[T, U]].compute(ctx)
-}
-
 class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializable {
   def muxPartitions[U :ClassTag](n: Int, f: Iterator[T] => Seq[U]): Seq[RDD[U]] = {
     require(n >= 0, "expected sequence length must be >= 0")
