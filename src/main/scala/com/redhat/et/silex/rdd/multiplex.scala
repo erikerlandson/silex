@@ -213,7 +213,8 @@ object MuxRDDFunctions {
 
 object implicits {
   import scala.language.implicitConversions
-  implicit def fromRDD[T :ClassTag](rdd: RDD[T]): MuxRDDFunctions[T] = new MuxRDDFunctions(rdd)
+  implicit def toMuxRDDFunctions[T :ClassTag](rdd: RDD[T]): MuxRDDFunctions[T] =
+    new MuxRDDFunctions(rdd)
 
   def benchmark[T](label: String)(blk: => T) = {
     val t0 = System.nanoTime
