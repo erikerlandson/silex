@@ -207,27 +207,6 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     val mux5 = mux.mapPartitions(itr => itr.next._5.toIterator)
     (mux1, mux2, mux3, mux4, mux5)
   }
-
-  def samplingMuxer[U](n: Int): Iterator[U] => Seq[Seq[U]] = {
-    (data: Iterator[U]) => {
-      val samples = Vector.fill(n) { scala.collection.mutable.ArrayBuffer.empty[U] }
-      data.foreach { e => samples(scala.util.Random.nextInt(n)) += e }
-      samples
-    }
-  }
-
-  def sampleMux(n: Int): Seq[RDD[T]] = {
-    flatMuxPartitions(n, samplingMuxer[T](n))
-  }
-
-  def sampleNoMux(n: Int, seed: Long = 42L): Seq[RDD[T]] = {
-    Vector.tabulate(n) { j =>
-      self.mapPartitions { data =>
-        scala.util.Random.setSeed(seed)
-        data.filter { unused => scala.util.Random.nextInt(n) == j }
-      }
-    }
-  }
 }
 
 object MuxRDDFunctions {
@@ -238,12 +217,4 @@ object implicits {
   import scala.language.implicitConversions
   implicit def toMuxRDDFunctions[T :ClassTag](rdd: RDD[T]): MuxRDDFunctions[T] =
     new MuxRDDFunctions(rdd)
-
-  def benchmark[T](label: String)(blk: => T) = {
-    val t0 = System.nanoTime
-    val t = blk
-    val sec = (System.nanoTime - t0) / 1e9
-    println(f"Run time for $label = $sec%.1f"); System.out.flush
-    t
-  }
 }

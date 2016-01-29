@@ -59,6 +59,15 @@ class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Se
       samples
     })
   }
+
+  def sampleNoMux(n: Int, seed: Long = 42L): Seq[RDD[T]] = {
+    Vector.tabulate(n) { j =>
+      self.mapPartitions { data =>
+        scala.util.Random.setSeed(seed)
+        data.filter { unused => scala.util.Random.nextInt(n) == j }
+      }
+    }
+  }
 }
 
 object SplitSampleRDDFunctions {
@@ -84,4 +93,12 @@ object implicits {
   import scala.language.implicitConversions
   implicit def splitSampleRDDFunctions[T :ClassTag](rdd: RDD[T]): SplitSampleRDDFunctions[T] =
     new SplitSampleRDDFunctions(rdd)
+
+  def benchmark[T](label: String)(blk: => T) = {
+    val t0 = System.nanoTime
+    val t = blk
+    val sec = (System.nanoTime - t0) / 1e9
+    println(f"Run time for $label = $sec%.1f"); System.out.flush
+    t
+  }
 }
