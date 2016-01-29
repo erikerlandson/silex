@@ -20,11 +20,18 @@ package com.redhat.et.silex.sample.split
 
 import scala.reflect.ClassTag
 
+import org.apache.spark.storage.StorageLevel
+
 import org.apache.spark.rdd.RDD
 import org.apache.spark.Logging
 
 class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializable {
   import com.redhat.et.silex.rdd.multiplex.implicits._
+
+  import SplitSampleRDDFunctions.{defaultSL, find}
+
+  def splitSample(n: Int, persist: StorageLevel): Seq[RDD[T]] =
+    splitSample(n, defaultSL)
 
   def splitSample(n: Int): Seq[RDD[T]] =
     self.flatMuxPartitions(n, (data: Iterator[T]) => {
@@ -32,6 +39,9 @@ class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Se
       data.foreach { e => samples(scala.util.Random.nextInt(n)) += e }
       samples
     })
+
+  def splitSample(weights: Seq[Double], persist: StorageLevel): Seq[RDD[T]] =
+    splitSample(weights, defaultSL)
 
   def splitSample(weights: Seq[Double]): Seq[RDD[T]] = {
     require(weights.length > 0, "weights must be non-empty")
@@ -43,7 +53,7 @@ class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Se
       val samples = Vector.fill(n) { scala.collection.mutable.ArrayBuffer.empty[T] }
       data.foreach { e =>
         val x = scala.util.Random.nextDouble
-        val j = SplitSampleRDDFunctions.find(x, w)
+        val j = find(x, w)
         samples(j) += e
       }
       samples
@@ -52,6 +62,8 @@ class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Se
 }
 
 object SplitSampleRDDFunctions {
+  private val defaultSL = StorageLevel.MEMORY_ONLY
+
   private def find(x: Double, w: Seq[Double]) = {
     var (l, u) = (0, w.length - 1)
     if (x >= 1.0) u - 1
