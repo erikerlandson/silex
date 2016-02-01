@@ -26,7 +26,6 @@ import org.apache.spark.{SparkContext, Logging, Partition, TaskContext,
 
 import org.apache.spark.storage.StorageLevel
 
-import com.redhat.et.silex.rdd.util
 
 class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializable {
   import MuxRDDFunctions.defaultSL
@@ -41,9 +40,8 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     persist: StorageLevel):
       Seq[RDD[U]] = {
     require(n >= 0, "expected sequence length must be >= 0")
-    val fc = util.clean(self.context, f)
     val mux = self.mapPartitions { itr =>
-      val r = fc(itr)
+      val r = f(itr)
       require(r.length == n, s"multiplexed sequence did not have expected length $n")
       Iterator.single(r)
     }
@@ -59,8 +57,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     f: Iterator[T] => (U1, U2),
     persist: StorageLevel):
       (RDD[U1], RDD[U2]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr))).cache()
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).cache()
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     (mux1, mux2)
@@ -74,8 +71,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag](f: Iterator[T] => (U1, U2, U3),
     persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr)))
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr)))
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     val mux3 = mux.mapPartitions(itr => Iterator.single(itr.next._3))
@@ -91,8 +87,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     f: Iterator[T] => (U1, U2, U3, U4),
     persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr)))
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr)))
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     val mux3 = mux.mapPartitions(itr => Iterator.single(itr.next._3))
@@ -109,8 +104,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     f: Iterator[T] => (U1, U2, U3, U4, U5),
     persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr)))
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr)))
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     val mux3 = mux.mapPartitions(itr => Iterator.single(itr.next._3))
@@ -129,9 +123,8 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     persist: StorageLevel):
       Seq[RDD[U]] = {
     require(n >= 0, "expected sequence length must be >= 0")
-    val fc = util.clean(self.context, f)
     val mux = self.mapPartitions { itr =>
-      val r = fc(itr)
+      val r = f(itr)
       require(r.length == n, s"multiplexed sequence was not expected length $n")
       Iterator.single(r)
     }.persist(persist)
@@ -147,8 +140,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2]),
     persist: StorageLevel):
       (RDD[U1], RDD[U2]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr))).persist(persist)
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     (mux1, mux2)
@@ -163,8 +155,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3]),
     persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr))).persist(persist)
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     val mux3 = mux.mapPartitions(itr => itr.next._3.toIterator)
@@ -180,8 +171,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4]),
     persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr))).persist(persist)
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     val mux3 = mux.mapPartitions(itr => itr.next._3.toIterator)
@@ -198,8 +188,7 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4], TraversableOnce[U5]),
     persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) = {
-    val fc = util.clean(self.context, f)
-    val mux = self.mapPartitions(itr => Iterator.single(fc(itr))).persist(persist)
+    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     val mux3 = mux.mapPartitions(itr => itr.next._3.toIterator)
