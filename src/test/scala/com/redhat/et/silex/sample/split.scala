@@ -40,11 +40,11 @@ class SplitSampleSpec extends FlatSpec with Matchers with PerTestSparkContext {
     Dvals.forall(_ < D) should be (true)
   }
 
-  it should "provide splitSample with weights argument" in {
+  it should "provide weightedSplitSample with weights argument" in {
     val rdd = context.parallelize(1 to 10000, 4)
     val rsRes = rdd.randomSplit(Array(1.0, 2.0, 3.0)).toSeq
       .map(_.collect.seq.sliding(2).map(e => e(1) - e(0)).toVector)
-    val ssRes = rdd.splitSample(Seq(1.0, 2.0, 3.0))
+    val ssRes = rdd.weightedSplitSample(Seq(1.0, 2.0, 3.0))
       .map(_.collect.seq.sliding(2).map(e => e(1) - e(0)).toVector)
     val Dvals = rsRes.zip(ssRes).map { case (rs, ss) =>
       medianKSD(SamplingIterator { rs }, SamplingIterator { ss })

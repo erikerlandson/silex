@@ -30,20 +30,18 @@ class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Se
 
   import SplitSampleRDDFunctions.{defaultSL, find}
 
-  def splitSample(n: Int, persist: StorageLevel): Seq[RDD[T]] =
-    splitSample(n, defaultSL)
-
-  def splitSample(n: Int): Seq[RDD[T]] =
+  def splitSample(n: Int,
+    persist: StorageLevel = defaultSL,
+    seed: Long = scala.util.Random.nextLong): Seq[RDD[T]] =
     self.flatMuxPartitions(n, (data: Iterator[T]) => {
       val samples = Vector.fill(n) { scala.collection.mutable.ArrayBuffer.empty[T] }
       data.foreach { e => samples(scala.util.Random.nextInt(n)) += e }
       samples
-    })
+    }, persist)
 
-  def splitSample(weights: Seq[Double], persist: StorageLevel): Seq[RDD[T]] =
-    splitSample(weights, defaultSL)
-
-  def splitSample(weights: Seq[Double]): Seq[RDD[T]] = {
+  def weightedSplitSample(weights: Seq[Double],
+    persist: StorageLevel = defaultSL,
+    seed: Long = scala.util.Random.nextLong): Seq[RDD[T]] = {
     require(weights.length > 0, "weights must be non-empty")
     require(weights.forall(_ > 0.0), "weights must be > 0")
     val n = weights.length
@@ -57,7 +55,7 @@ class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Se
         samples(j) += e
       }
       samples
-    })
+    }, persist)
   }
 
   def sampleNoMux(n: Int, seed: Long = 42L): Seq[RDD[T]] = {
