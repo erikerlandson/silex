@@ -33,31 +33,55 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def muxPartitions[U :ClassTag](
     n: Int, f: Iterator[T] => Seq[U]):
       Seq[RDD[U]] =
+    muxPartitions(n, (id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def muxPartitions[U :ClassTag](
+    n: Int, f: (Int, Iterator[T]) => Seq[U]):
+      Seq[RDD[U]] =
     muxPartitions(n, f, defaultSL)
 
   def muxPartitions[U :ClassTag](
     n: Int, f: Iterator[T] => Seq[U],
     persist: StorageLevel):
+      Seq[RDD[U]] =
+    muxPartitions(n, (id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def muxPartitions[U :ClassTag](
+    n: Int, f: (Int, Iterator[T]) => Seq[U],
+    persist: StorageLevel):
       Seq[RDD[U]] = {
     require(n >= 0, "expected sequence length must be >= 0")
-    val mux = self.mapPartitions { itr =>
-      val r = f(itr)
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      val r = f(id, itr)
       require(r.length == n, s"multiplexed sequence did not have expected length $n")
       Iterator.single(r)
-    }
+    }.persist(persist)
     Vector.tabulate(n) { j => mux.mapPartitions { itr => Iterator.single(itr.next()(j)) } }
   }
 
   def muxPartitions[U1 :ClassTag, U2 :ClassTag](
     f: Iterator[T] => (U1, U2)):
       (RDD[U1], RDD[U2]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2)):
+      (RDD[U1], RDD[U2]) =
     muxPartitions(f, defaultSL)
 
   def muxPartitions[U1 :ClassTag, U2 :ClassTag](
     f: Iterator[T] => (U1, U2),
     persist: StorageLevel):
+      (RDD[U1], RDD[U2]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2),
+    persist: StorageLevel):
       (RDD[U1], RDD[U2]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).cache()
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     (mux1, mux2)
@@ -66,12 +90,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag](
     f: Iterator[T] => (U1, U2, U3)):
       (RDD[U1], RDD[U2], RDD[U3]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2, U3)):
+      (RDD[U1], RDD[U2], RDD[U3]) =
     muxPartitions(f, defaultSL)
 
-  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag](f: Iterator[T] => (U1, U2, U3),
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag](
+    f: Iterator[T] => (U1, U2, U3),
+    persist: StorageLevel):
+      (RDD[U1], RDD[U2], RDD[U3]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2, U3),
     persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr)))
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     val mux3 = mux.mapPartitions(itr => Iterator.single(itr.next._3))
@@ -81,13 +119,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag](
     f: Iterator[T] => (U1, U2, U3, U4)):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2, U3, U4)):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) =
     muxPartitions(f, defaultSL)
 
   def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag](
     f: Iterator[T] => (U1, U2, U3, U4),
     persist: StorageLevel):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2, U3, U4),
+    persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr)))
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     val mux3 = mux.mapPartitions(itr => Iterator.single(itr.next._3))
@@ -98,13 +149,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag, U5 :ClassTag](
     f: Iterator[T] => (U1, U2, U3, U4, U5)):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag, U5 :ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2, U3, U4, U5)):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) =
     muxPartitions(f, defaultSL)
 
   def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag, U5 :ClassTag](
     f: Iterator[T] => (U1, U2, U3, U4, U5),
     persist: StorageLevel):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) =
+    muxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def muxPartitions[U1 :ClassTag, U2 :ClassTag, U3: ClassTag, U4 :ClassTag, U5 :ClassTag](
+    f: (Int, Iterator[T]) => (U1, U2, U3, U4, U5),
+    persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr)))
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => Iterator.single(itr.next._1))
     val mux2 = mux.mapPartitions(itr => Iterator.single(itr.next._2))
     val mux3 = mux.mapPartitions(itr => Iterator.single(itr.next._3))
@@ -116,15 +180,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def flatMuxPartitions[U :ClassTag](
     n: Int, f: Iterator[T] => Seq[TraversableOnce[U]]):
       Seq[RDD[U]] =
+    flatMuxPartitions(n, (id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def flatMuxPartitions[U :ClassTag](
+    n: Int, f: (Int, Iterator[T]) => Seq[TraversableOnce[U]]):
+      Seq[RDD[U]] =
     flatMuxPartitions(n, f, defaultSL)
 
   def flatMuxPartitions[U :ClassTag](
     n: Int, f: Iterator[T] => Seq[TraversableOnce[U]],
     persist: StorageLevel):
+      Seq[RDD[U]] =
+    flatMuxPartitions(n, (id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def flatMuxPartitions[U :ClassTag](
+    n: Int, f: (Int, Iterator[T]) => Seq[TraversableOnce[U]],
+    persist: StorageLevel):
       Seq[RDD[U]] = {
     require(n >= 0, "expected sequence length must be >= 0")
-    val mux = self.mapPartitions { itr =>
-      val r = f(itr)
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      val r = f(id, itr)
       require(r.length == n, s"multiplexed sequence was not expected length $n")
       Iterator.single(r)
     }.persist(persist)
@@ -134,13 +209,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2])):
       (RDD[U1], RDD[U2]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2])):
+      (RDD[U1], RDD[U2]) =
     flatMuxPartitions(f, defaultSL)
 
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2]),
     persist: StorageLevel):
+      (RDD[U1], RDD[U2]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2]),
+    persist: StorageLevel):
       (RDD[U1], RDD[U2]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     (mux1, mux2)
@@ -149,13 +237,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3])):
       (RDD[U1], RDD[U2], RDD[U3]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3])):
+      (RDD[U1], RDD[U2], RDD[U3]) =
     flatMuxPartitions(f, defaultSL)
 
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3]),
     persist: StorageLevel):
+      (RDD[U1], RDD[U2], RDD[U3]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3]),
+    persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
+    val mux = self.mapPartitionsWithIndex { case(id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     val mux3 = mux.mapPartitions(itr => itr.next._3.toIterator)
@@ -165,13 +266,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4])):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4])):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) =
     flatMuxPartitions(f, defaultSL)
 
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4]),
     persist: StorageLevel):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4]),
+    persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
+    val mux = self.mapPartitionsWithIndex { case (id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     val mux3 = mux.mapPartitions(itr => itr.next._3.toIterator)
@@ -182,13 +296,26 @@ class MuxRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Serializab
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag, U5 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4], TraversableOnce[U5])):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), defaultSL)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag, U5 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4], TraversableOnce[U5])):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) =
     flatMuxPartitions(f, defaultSL)
 
   def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag, U5 :ClassTag](
     f: Iterator[T] => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4], TraversableOnce[U5]),
     persist: StorageLevel):
+      (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) =
+    flatMuxPartitions((id: Int, itr: Iterator[T]) => f(itr), persist)
+
+  def flatMuxPartitions[U1 :ClassTag, U2 :ClassTag, U3 :ClassTag, U4 :ClassTag, U5 :ClassTag](
+    f: (Int, Iterator[T]) => (TraversableOnce[U1], TraversableOnce[U2], TraversableOnce[U3], TraversableOnce[U4], TraversableOnce[U5]),
+    persist: StorageLevel):
       (RDD[U1], RDD[U2], RDD[U3], RDD[U4], RDD[U5]) = {
-    val mux = self.mapPartitions(itr => Iterator.single(f(itr))).persist(persist)
+    val mux = self.mapPartitionsWithIndex { case(id, itr) =>
+      Iterator.single(f(id, itr))
+    }.persist(persist)
     val mux1 = mux.mapPartitions(itr => itr.next._1.toIterator)
     val mux2 = mux.mapPartitions(itr => itr.next._2.toIterator)
     val mux3 = mux.mapPartitions(itr => itr.next._3.toIterator)
