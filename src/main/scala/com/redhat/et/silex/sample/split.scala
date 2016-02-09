@@ -59,15 +59,6 @@ class SplitSampleRDDFunctions[T :ClassTag](self: RDD[T]) extends Logging with Se
       samples
     }, persist)
   }
-
-  def sampleNoMux(n: Int, seed: Long = 42L): Seq[RDD[T]] = {
-    Vector.tabulate(n) { j =>
-      self.mapPartitions { data =>
-        scala.util.Random.setSeed(seed)
-        data.filter { unused => scala.util.Random.nextInt(n) == j }
-      }
-    }
-  }
 }
 
 object SplitSampleRDDFunctions {
@@ -94,11 +85,67 @@ object implicits {
   implicit def splitSampleRDDFunctions[T :ClassTag](rdd: RDD[T]): SplitSampleRDDFunctions[T] =
     new SplitSampleRDDFunctions(rdd)
 
-  def benchmark[T](label: String)(blk: => T) = {
+}
+
+object benchmark {
+  import java.io._
+
+  import org.json4s.JsonDSL._
+  import org.json4s.jackson.JsonMethods._
+
+  import com.redhat.et.silex.rdd.ancestry.implicits._
+
+  import implicits._
+
+  def benchmark[T](blk: => T, label: String = "") = {
     val t0 = System.nanoTime
     val t = blk
     val sec = (System.nanoTime - t0) / 1e9
-    println(f"Run time for $label = $sec%.1f"); System.out.flush
-    t
+    if (label.length > 0) println("time for %s = %.3g sec".format(label, sec))
+    (sec, t)
+  }
+
+  def sampleNoMux[T :ClassTag](rdd: RDD[T], n: Int): Seq[RDD[T]] = {
+    Vector.tabulate(n) { j =>
+      rdd.mapPartitions { data =>
+        data.filter { unused => scala.util.Random.nextInt(n) == j }
+      }
+    }
+  }
+
+  def benchmarkMux(data: RDD[Int], n: Int, nsplits: Seq[Int]) = {
+    nsplits.map { ns =>
+      val td = Vector.fill(n + 2) {
+        val (sec, t) = benchmark {
+          val ss = data.splitSample(ns)
+          ss.map(_.count)
+          ss(0).ancestry.filter(_.ply == 1).foreach(_.rdd.unpersist())
+        }
+        sec
+      }.sorted.slice(1,n-1)
+      (true, ns, td)
+    }
+  }
+
+  def benchmarkNoMux(data: RDD[Int], n: Int, nsplits: Seq[Int]) = {
+    nsplits.map { ns =>
+      val td = Vector.fill(n + 2) {
+        val (sec, t) = benchmark {
+          val ss = sampleNoMux(data, ns)
+          ss.map(_.count)
+        }
+        sec
+      }.sorted.slice(1,n-1)
+      (false, ns, td)
+    }
+  }
+
+  def writeJSON(data: Seq[(Boolean, Int, Seq[Double])], fname: String) {
+    val json = data.map { case (mux, n, times) =>
+      ("mux" -> mux) ~ ("n" -> n) ~ ("times" -> times)
+    }
+    val out = new PrintWriter(new File(fname))
+    out.println(pretty(render(json)))
+    out.close()
   }
 }
