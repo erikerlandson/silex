@@ -26,6 +26,35 @@ import scala.collection.parallel.ForkJoinTaskSupport
 import org.apache.spark.rdd.RDD
 import org.apache.spark.Logging
 
+object infra {
+  import breeze.linalg._
+  def svdInv(a: DenseMatrix[Double], svf: Double = 1e-6): Matrix[Double] = {
+    val svd.SVD(u,s,v) = svd(a)
+    val t = math.max(s(0) * svf, 1e-100)
+    v.t * diag(s.map { e => if (e >= t) (1.0 / e) else 0.0 }) * u.t
+  }
+
+  import org.apache.commons.math3.random.EmpiricalDistribution
+
+  def pdf(data: Seq[Double], bins: Int = 20): Double => Double = {
+    val ed = new EmpiricalDistribution(bins)
+    ed.load(data.toArray)
+    (x: Double) => ed.density(x)
+  }
+
+  import java.io._
+
+  import org.json4s.JsonDSL._
+  import org.json4s.jackson.JsonMethods._
+
+  def writeDistances(data: Seq[Double], fname: String) {
+    val json = ("distances" -> data)
+    val out = new PrintWriter(new File(fname))
+    out.println(pretty(render(json)))
+    out.close()
+  }
+}
+
 /** An object for training a K-Medoid clustering model on Seq or RDD data.
   *
   * Data is required to have a metric function defined on it, but it does not require an algebra
@@ -235,6 +264,32 @@ case class KMedoids[T](
     new KMedoidsModel(refined, metric)
   }
 
+  def fGauss(x: T, m: T, vr: Double) = {
+    val d = metric(x, m)
+    math.exp(-(d * d) / (2.0 * vr)) / math.sqrt(2.0 * math.Pi * vr)
+  }
+
+  def refineSigma(sigma: Vector[Double], model: Vector[T], data: Seq[T]) = {
+    (1 to 5).foldLeft(sigma) { case(curSig, itr) =>
+      logInfo(s"itr= $itr")
+      logInfo(s"curSig= $curSig")
+      val mzc = model.zip(curSig)
+      val zkx = data.map { x =>
+        mzc.foldLeft(0.0) { case (s, (mk, vk)) => s + fGauss(x, mk, vk) }
+      }
+      val nxtSig = mzc.map { case (mk, vk) =>
+        val (n, ss) = data.zip(zkx).foldLeft((0.0, 0.0)) { case ((fn, fss), (x, zx)) =>
+          val d = metric(x, mk)
+          val f = fGauss(x, mk, vk) / zx
+          (fn + f, fss + f * d * d)
+        }
+        ss / (n - 1.0)
+      }
+      logInfo(s"nxtSig= $nxtSig")
+      nxtSig
+    }
+  }
+
   private def doRunMDL(data: Seq[T], rng: scala.util.Random) = {
     val startTime = System.nanoTime
     val threadPool = new ForkJoinPool(numThreads)
@@ -282,7 +337,8 @@ case class KMedoids[T](
 
       logInfo(s"""k= $k  model=\n${model.mkString("\n")}""")
 
-      val sigma = model.zip(clusters).map { case (mk, ck) =>
+/*
+      val usigma = model.zip(clusters).map { case (mk, ck) =>
         val nk = ck.length.toDouble
         if (nk <= 1.0) 0.0 else {
           val sdd = ck.iterator.map { x =>
@@ -291,8 +347,11 @@ case class KMedoids[T](
           sdd / (nk - 1.0)
         }
       }
+      val sigma = refineSigma(usigma, model, data)
       logInfo(s"sigma= $sigma")
-
+*/
+      
+/*
       val sigmaGZ = sigma.filter(_ > 0.0)
       sigmaMin = (sigmaGZ :+ sigmaMin).min
       val sigmaNZ = sigma.map { s => if (s > 0.0) s else sigmaMin / 2.0 }
@@ -309,6 +368,40 @@ case class KMedoids[T](
         }.sum
         -math.log(p)
       }.sum
+*/
+
+      infra.writeDistances(
+         model.zip(clusters).flatMap { case (mk, ck) => ck.map(metric(_, mk)) }
+        , s"/tmp/distances_k_$k")
+
+/*
+      val sigma = model.zip(clusters).foldLeft(0.0) { case (ss, (mk, ck)) =>
+        ck.foldLeft(ss) { case (s, x) => 
+          val d = metric(x, mk)
+          s + d * d
+        }
+      } / (n - 1.0)
+      logInfo(s"sigma= $sigma")
+
+      val repCost = model.zip(clusters).foldLeft(0.0) { case (ss, (mk, ck)) =>
+        ck.foldLeft(ss) { case (s, x) => 
+          val d = metric(x, mk)
+          s + ((d * d) / (2.0 * sigma))
+        }
+      } + n * math.log(math.sqrt(2.0*math.Pi*sigma) / 2.0)
+*/
+
+      val pdf = infra.pdf(
+        model.zip(clusters).flatMap { case (mk, ck) => ck.map(metric(_, mk)) }
+        , bins = 10)
+
+      val repCost = model.zip(clusters).foldLeft(0.0) { case (ss, (mk, ck)) =>
+        ck.foldLeft(ss) { case (s, x) =>
+          val f = pdf(metric(x, mk))
+          s + (if (f > 0.0) (-math.log(f)) else 100.0)
+        }
+      }
+
       // MDL cost: representation cost plus model cost
       val modCost = k * math.log(data.length.toDouble)
       val modelCostMDL = repCost + modCost
@@ -515,6 +608,16 @@ object KMedoids extends Logging {
     s
   }
 
+  val euclidean = (x: Vector[Double], y: Vector[Double]) => {
+    val n = x.length
+    var j = 0
+    var s = 0.0
+    while (j < n) {
+      s += math.pow(x(j) - y(j), 2)
+      j += 1
+    }
+    math.sqrt(s)
+  }
 
   /** Default values for KMedoids class paramers.
     * @note If you alter these, make sure you update documentation, update the corresponding
