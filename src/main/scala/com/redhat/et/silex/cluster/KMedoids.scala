@@ -42,12 +42,50 @@ object infra {
     (x: Double) => ed.density(x)
   }
 
+  import org.apache.commons.math3.stat.inference.{ KolmogorovSmirnovTest => KSTest }
+  import org.apache.commons.math3.distribution.GammaDistribution
+
+  def gamma(data: Seq[Double]) = {
+    val (k1, theta1) = {
+      val dgz = data.filter(_ > 0.0)
+      val n = dgz.length.toDouble
+      val sx = dgz.foldLeft(0.0)(_ + _)
+      val slnx = dgz.foldLeft(0.0) { case (s, x) => s + math.log(x) }
+      val s = math.log(sx / n) - (slnx / n)
+      val k = math.max(1.0, (3.0 - s + math.sqrt(math.pow(s - 3.0, 2) + (24.0 * s))) / (12.0 * s))
+      val theta = sx / (k * n)
+      (k, theta)
+    }
+    val (k2, theta2) = {
+      val sx = data.foldLeft(0.0)(_ + _)
+      val n = data.length.toDouble
+      val lambdaInv = sx / n
+      (1.0, lambdaInv)
+    }
+
+    val ksTest = new KSTest()
+    val (kB, thetaB) = Seq((k1, theta1), (k2, theta2)).minBy { case (k, theta) =>
+      val gd = new GammaDistribution(k, theta)
+      ksTest.kolmogorovSmirnovStatistic(gd, data.toArray)
+    }
+
+    val dist = new GammaDistribution(kB, thetaB)
+    (x: Double) => dist.density(x)
+  }
+
   import java.io._
 
   import org.json4s.JsonDSL._
   import org.json4s.jackson.JsonMethods._
 
   def writeDistances(data: Seq[Double], fname: String) {
+    val json = ("distances" -> data)
+    val out = new PrintWriter(new File(fname))
+    out.println(pretty(render(json)))
+    out.close()
+  }
+
+  def writeDistancesK(data: Seq[Seq[Double]], fname: String) {
     val json = ("distances" -> data)
     val out = new PrintWriter(new File(fname))
     out.println(pretty(render(json)))
@@ -198,10 +236,7 @@ case class KMedoids[T](
     jMin
   }
 
-  private def medoidCost(e: T, data: Seq[T]) = data.iterator.map { x => 
-    val d = metric(e, x)
-    d * d
-  }.sum
+  private def medoidCost(e: T, data: Seq[T]) = data.iterator.map(metric(_, e)).sum
   private def modelCost(mv: Vector[T], data: Seq[T]) =
     data.iterator.map(medoidDist(_, mv)).sum / data.length.toDouble
 
@@ -337,63 +372,22 @@ case class KMedoids[T](
 
       logInfo(s"""k= $k  model=\n${model.mkString("\n")}""")
 
-/*
-      val usigma = model.zip(clusters).map { case (mk, ck) =>
-        val nk = ck.length.toDouble
-        if (nk <= 1.0) 0.0 else {
-          val sdd = ck.iterator.map { x =>
-            val d = metric(x, mk);
-            d * d }.sum
-          sdd / (nk - 1.0)
-        }
-      }
-      val sigma = refineSigma(usigma, model, data)
-      logInfo(s"sigma= $sigma")
-*/
-      
-/*
-      val sigmaGZ = sigma.filter(_ > 0.0)
-      sigmaMin = (sigmaGZ :+ sigmaMin).min
-      val sigmaNZ = sigma.map { s => if (s > 0.0) s else sigmaMin / 2.0 }
-      logInfo(s"sigmaNZ= $sigmaNZ")
-
-      // data representation cost: log-likeligood of points given their clusters
-      val alpha = clusters.map(_.length.toDouble / n.toDouble)
-      val dd = sigmaNZ.map { s => math.sqrt(2.0 * math.Pi * s) }
-      val tup = model.zip(sigmaNZ).zip(alpha).zip(dd)
-      val repCost = data.iterator.map { x =>
-        val p = tup.iterator.map { case (((mk, sk), ak), dk) =>
-          val d = metric(x, mk)
-          ak * math.exp(-(d * d) / (2.0 * sk)) / dk
-        }.sum
-        -math.log(p)
-      }.sum
-*/
-
       infra.writeDistances(
          model.zip(clusters).flatMap { case (mk, ck) => ck.map(metric(_, mk)) }
         , s"/tmp/distances_k_$k")
 
+      infra.writeDistancesK(
+         model.zip(clusters).map { case (mk, ck) => ck.map(metric(_, mk)) }
+        , s"/tmp/distancesK_k_$k")
+
 /*
-      val sigma = model.zip(clusters).foldLeft(0.0) { case (ss, (mk, ck)) =>
-        ck.foldLeft(ss) { case (s, x) => 
-          val d = metric(x, mk)
-          s + d * d
-        }
-      } / (n - 1.0)
-      logInfo(s"sigma= $sigma")
-
-      val repCost = model.zip(clusters).foldLeft(0.0) { case (ss, (mk, ck)) =>
-        ck.foldLeft(ss) { case (s, x) => 
-          val d = metric(x, mk)
-          s + ((d * d) / (2.0 * sigma))
-        }
-      } + n * math.log(math.sqrt(2.0*math.Pi*sigma) / 2.0)
-*/
-
       val pdf = infra.pdf(
         model.zip(clusters).flatMap { case (mk, ck) => ck.map(metric(_, mk)) }
         , bins = 10)
+*/
+
+
+      val pdf = infra.gamma(model.zip(clusters).flatMap { case (mk, ck) => ck.map(metric(_, mk)) })
 
       val repCost = model.zip(clusters).foldLeft(0.0) { case (ss, (mk, ck)) =>
         ck.foldLeft(ss) { case (s, x) =>
@@ -402,8 +396,21 @@ case class KMedoids[T](
         }
       }
 
+/*
+      val pdfs = model.zip(clusters)
+        .map { case (mk, ck) => ck.map(metric(_, mk)) }
+        .map(infra.gamma)
+
+      val repCost = model.zip(clusters).zip(pdfs).foldLeft(0.0) { case (ss, ((mk, ck), pdf)) =>
+        ck.foldLeft(ss) { case (s, x) =>
+          val f = pdf(metric(x, mk))
+          s + (if (f > 0.0) (-math.log(f)) else 100.0)
+        }
+      }
+*/
       // MDL cost: representation cost plus model cost
-      val modCost = k * math.log(data.length.toDouble)
+      //val modCost = k * math.log(data.length.toDouble)
+      val modCost = 2 * k * math.log(data.length.toDouble)
       val modelCostMDL = repCost + modCost
       logInfo(f"model cost= $modCost%.4g  rep cost= $repCost%.4g")
       logInfo(f"MDL cost for $k%d clusters= $modelCostMDL%.4g")
@@ -421,104 +428,6 @@ case class KMedoids[T](
     new KMedoidsModel(best, metric)
   }
 
-/*
-  private def doRunMDL(data: Seq[T], rng: scala.util.Random) = {
-    val startTime = System.nanoTime
-    val threadPool = new ForkJoinPool(numThreads)
-
-    logInfo(s"initializing model for k = 1")
-    var best = Vector.empty[T]
-    var bestCostMDL = Double.MaxValue
-    var current = Vector(medoid(data, threadPool))
-
-    val itrStartTime = System.nanoTime
-    val initSeconds = (itrStartTime - startTime) / 1e9
-    logInfo(f"model initialization completed $initSeconds%.1f sec")
-
-    val n = data.length
-    var sigmaMin = Double.MaxValue
-    var halt = false
-    while (!halt) {
-      val kCur = current.length
-
-      logInfo(s"""k= $kCur  model=\n${current.mkString("\n")}""")
-
-      val clusters = data.groupBy(medoidIdx(_, current)).toVector.sortBy(_._1).map(_._2)
-      val sigma = current.zip(clusters).map { case (mk, ck) =>
-        val nk = ck.length.toDouble
-        if (nk <= 1.0) 0.0 else {
-          val sdd = ck.iterator.map { x =>
-            val d = metric(x, mk);
-            d * d }.sum
-          sdd / (nk - 1.0)
-        }
-      }
-      logInfo(s"sigma= $sigma")
-
-      val sigmaGZ = sigma.filter(_ > 0.0)
-      sigmaMin = (sigmaGZ :+ sigmaMin).min
-      val sigmaNZ = sigma.map { s => if (s > 0.0) s else sigmaMin / 2.0 }
-      logInfo(s"sigmaNZ= $sigmaNZ")
-
-      // data representation cost: log-likeligood of points given their clusters
-      val alpha = clusters.map(_.length.toDouble / n.toDouble)
-      val dd = sigmaNZ.map { s => math.sqrt(2.0 * math.Pi * s) }
-      val tup = current.zip(sigmaNZ).zip(alpha).zip(dd)
-      val repCost = data.iterator.map { x =>
-        val p = tup.iterator.map { case (((mk, sk), ak), dk) =>
-          val d = metric(x, mk)
-          ak * math.exp(-(d * d) / (2.0 * sk)) / dk
-        }.sum
-        -math.log(p)
-      }.sum
-      // MDL cost: representation cost plus model cost
-      val modCost = kCur * math.log(data.length.toDouble)
-      val currentCostMDL = repCost + modCost
-      logInfo(f"model cost= $modCost%.4g  rep cost= $repCost%.4g")
-      logInfo(f"MDL cost for $kCur%d clusters= $currentCostMDL%.4g  previous= $bestCostMDL%.4g")
-
-      if (currentCostMDL >= bestCostMDL) {
-        logInfo(s"HALTING - no improvement in MDL cost")
-        halt = true
-      } else if (kCur > 5) {
-        logInfo(s"HALTING - maximum cluster limit")
-        halt = true
-      }
-
-      if (!halt) {
-        best = current
-        val bestClusters = clusters
-        bestCostMDL = currentCostMDL
-
-        logInfo(s"Testing next splits")
-        val next = Vector.tabulate(best.length) { jSplit =>
-          logInfo(s"Testing split on $jSplit")
-          val ma = best.slice(0, jSplit)
-          val mb = best.slice(jSplit + 1, best.length)
-          val cSplit = bestClusters(jSplit)
-          val m0 = cSplit.maxBy(metric(_, best(jSplit)))
-          val m1 = cSplit.maxBy(metric(_, m0))
-          if (metric(m0, m1) <= 0.0) Vector.empty[T] else {
-            val init = Vector(m0, m1)
-            val (splitModel, _, _, _) =
-              refine(cSplit, init, modelCost(init, cSplit), threadPool)
-            ma ++ splitModel ++ mb
-          }
-        }.filter(_.length == kCur + 1)
-
-        if (next.isEmpty) {
-          halt = true
-        } else {
-          current = next.minBy(modelCost(_, data))
-        }
-      }
-    }
-
-    val runtime = (System.nanoTime - itrStartTime) / 1e9
-    logInfo(f"finished at cluster size ${best.length} with model cost= $bestCostMDL%.3g   runtime= $runtime")
-    new KMedoidsModel(best, metric)
-  }
-*/
 
   private def refine(
     data: Seq[T],
