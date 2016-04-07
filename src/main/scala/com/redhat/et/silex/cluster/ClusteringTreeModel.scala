@@ -92,11 +92,9 @@ package infra {
   }
 }
 
-import infra._
-
 class ClusteringTreeModel(self: DecisionTreeModel) extends Serializable {
   import ClusteringTreeModel.Predicate
-  import ClusteringNode._
+  import infra.ClusteringNode._
 
   def predictLeafId(features: SparkVector): Int = self.topNode.predictLeafId(features)
 
