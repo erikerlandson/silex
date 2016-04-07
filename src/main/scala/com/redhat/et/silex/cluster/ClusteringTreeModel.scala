@@ -19,21 +19,19 @@
 package com.redhat.et.silex.cluster
 
 import scala.language.implicitConversions
-import scala.reflect.ClassTag
 import scala.collection.mutable
 
 import org.apache.spark.mllib.tree.model.{ Node, DecisionTreeModel }
-import org.apache.spark.mllib.tree.configuration.Algo.Algo
 import org.apache.spark.mllib.tree.configuration.FeatureType._
 import org.apache.spark.mllib.linalg.{ Vector => SparkVector }
 
 package infra {
-  class ClusteringNode(self: Node) {
+  class ClusteringNode(self: Node) extends Serializable {
     import ClusteringTreeModel.Predicate
     import ClusteringNode._
 
     def nodeIterator: Iterator[Node] = new Iterator[Node] {
-      val que = scala.collection.mutable.Queue(self)
+      val que = mutable.Queue(self)
       def hasNext = !que.isEmpty
       def next = {
         val nxt = que.dequeue()
@@ -96,7 +94,7 @@ package infra {
 
 import infra._
 
-class ClusteringTreeModel(self: DecisionTreeModel) {
+class ClusteringTreeModel(self: DecisionTreeModel) extends Serializable {
   import ClusteringTreeModel.Predicate
   import ClusteringNode._
 
