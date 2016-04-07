@@ -27,7 +27,7 @@ import org.apache.spark.mllib.linalg.{ Vector => SparkVector }
 
 package infra {
   class ClusteringNode(self: Node) extends Serializable {
-    import ClusteringTreeModel.Predicate
+    import ClusteringTreeModel._
     import ClusteringNode._
 
     def nodeIterator: Iterator[Node] = new Iterator[Node] {
@@ -53,7 +53,7 @@ package infra {
       } else {
         val t = self.split.get.threshold
         val f = self.split.get.feature
-        val fname = names.applyOrElse(f, (x: Int) => "f_" + x.toString)
+        val fname = names.applyOrElse(f, defaultName)
         self.leftNode.get
           .rulesImpl(names, Predicate(fname, Predicate.LE, t)::pstack, rmap)
         self.rightNode.get
@@ -120,6 +120,8 @@ object ClusteringTreeModel {
     case object LE extends Op
     case object GT extends Op
   }
+
+  def defaultName(idx: Int): String = s"f_$idx"
 
   implicit def fromDTM(self: DecisionTreeModel): ClusteringTreeModel =
     new ClusteringTreeModel(self)
