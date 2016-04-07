@@ -56,7 +56,7 @@ class RandomForestClusteringModel(self: RandomForestModel) extends Serializable 
       (names.applyOrElse(idx, defaultName), n)
     }
 
-  def rfRules(names: PartialFunction[Int, String]): Map[Double, Seq[Seq[Predicate]]] = {
+  def rules(names: PartialFunction[Int, String]): Map[Double, Seq[Seq[Predicate]]] = {
     val dtr = dti.map(_.rules(names))
     dtr.foldLeft(Map.empty[Double, Seq[Seq[Predicate]]]) { (m, x) =>
       x.keys.foldLeft(m) { (m, k) =>
