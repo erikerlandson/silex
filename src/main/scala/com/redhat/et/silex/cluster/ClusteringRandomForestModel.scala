@@ -27,7 +27,7 @@ import org.apache.spark.mllib.linalg.{ Vector => SparkVector }
 
 import org.apache.spark.mllib.tree.model.{ DecisionTreeModel, RandomForestModel }
 
-class RandomForestClusteringModel(self: RandomForestModel) extends Serializable {
+class ClusteringRandomForestModel(self: RandomForestModel) extends Serializable {
   import ClusteringTreeModel._
 
   def predictLeafIds(features: SparkVector): Vector[Int] =
@@ -74,9 +74,9 @@ class RandomForestClusteringModel(self: RandomForestModel) extends Serializable 
   }
 }
 
-object RandomForestClusteringModel {
-  implicit def fromRFM(self: RandomForestModel): RandomForestClusteringModel =
-    new RandomForestClusteringModel(self)
+object ClusteringRandomForestModel {
+  implicit def fromRFM(self: RandomForestModel): ClusteringRandomForestModel =
+    new ClusteringRandomForestModel(self)
 }
 
 
