@@ -26,7 +26,7 @@ import org.apache.spark.mllib.tree.configuration.FeatureType._
 import org.apache.spark.mllib.linalg.{ Vector => SparkVector }
 
 package infra {
-  class ClusteringNode(self: Node) extends Serializable {
+  class ClusteringNode(val self: Node) extends AnyVal {
     import ClusteringTreeModel._
     import ClusteringNode._
 
@@ -43,27 +43,41 @@ package infra {
     }
 
     private [infra] def rulesImpl(
-        names: PartialFunction[Int, String],
-        pstack: List[Predicate],
-        rmap: mutable.Map[Double, mutable.ArrayBuffer[Seq[Predicate]]]) {
+      names: PartialFunction[Int, String],
+      catInfo: PartialFunction[Int, Int],
+      pstack: List[Predicate],
+      rmap: mutable.Map[Double, mutable.ArrayBuffer[Seq[Predicate]]]) {
+
+      import Predicate._
+
       if (self.isLeaf) {
         val cat = self.predict.predict
         if (!rmap.contains(cat)) rmap += (cat -> mutable.ArrayBuffer.empty[Seq[Predicate]])
         rmap(cat) += pstack.reverse
       } else {
-        val t = self.split.get.threshold
-        val f = self.split.get.feature
+        val split = self.split.get
+        val f = split.feature
         val fname = names.applyOrElse(f, defaultName)
-        self.leftNode.get
-          .rulesImpl(names, Predicate(fname, Predicate.LE, t)::pstack, rmap)
-        self.rightNode.get
-          .rulesImpl(names, Predicate(fname, Predicate.GT, t)::pstack, rmap)
+        if (split.featureType == Continuous) {
+          val t = split.threshold
+          self.leftNode.get.rulesImpl(names, catInfo, LE(fname, t)::pstack, rmap)
+          self.rightNode.get.rulesImpl(names, catInfo, GT(fname, t)::pstack, rmap)
+        } else {
+          val c = split.categories
+          self.leftNode.get.rulesImpl(names, catInfo, IN(fname, c)::pstack, rmap)
+          val rpred =
+            if (catInfo.isDefinedAt(f)) IN(fname, (0 until catInfo(f)).map(_.toDouble).diff(c))
+            else NOTIN(fname, c)
+          self.rightNode.get.rulesImpl(names, catInfo, rpred::pstack, rmap)
+        }
       }
     }
 
-    def rules(names: PartialFunction[Int, String]): Map[Double, Seq[Seq[Predicate]]] = {
+    def rules(
+      names: PartialFunction[Int, String],
+      catInfo: PartialFunction[Int, Int]): Map[Double, Seq[Seq[Predicate]]] = {
       val rmap = mutable.Map.empty[Double, mutable.ArrayBuffer[Seq[Predicate]]]
-      rulesImpl(names, List.empty[Predicate], rmap)
+      rulesImpl(names, catInfo, List.empty[Predicate], rmap)
       rmap.toMap
     }
 
@@ -100,25 +114,29 @@ class ClusteringTreeModel(self: DecisionTreeModel) extends Serializable {
 
   def nodeIterator: Iterator[Node] = self.topNode.nodeIterator
 
-  def rules(names: PartialFunction[Int, String]): Map[Double, Seq[Seq[Predicate]]] =
-    self.topNode.rules(names)
+  def rules(
+    names: PartialFunction[Int, String],
+    catInfo: PartialFunction[Int, Int]): Map[Double, Seq[Seq[Predicate]]] =
+    self.topNode.rules(names, catInfo)
 }
 
 object ClusteringTreeModel {
-  case class Predicate(feature: String, op: Predicate.Op, threshold: Double) {
-    override def toString = {
-      val opstr = op match {
-        case Predicate.LE => "<="
-        case Predicate.GT => ">"
-      }
-      "(" + feature + " " + opstr + " " + threshold.toString + ")"
-    }
+  sealed trait Predicate extends Serializable {
+    def feature: String
   }
-
   object Predicate {
-    sealed trait Op
-    case object LE extends Op
-    case object GT extends Op
+    case class LE(feature: String, threshold: Double) extends Predicate {
+      override def toString = s"($feature <= $threshold)"
+    }
+    case class GT(feature: String, threshold: Double) extends Predicate {
+      override def toString = s"($feature > $threshold)"
+    }
+    case class IN(feature: String, categories: Seq[Double]) extends Predicate {
+      override def toString = s"""($feature in [${categories.mkString(",")}])"""
+    }
+    case class NOTIN(feature: String, categories: Seq[Double]) extends Predicate {
+      override def toString = s"""($feature not-in [${categories.mkString(",")}])"""
+    }
   }
 
   def defaultName(idx: Int): String = s"f_$idx"
