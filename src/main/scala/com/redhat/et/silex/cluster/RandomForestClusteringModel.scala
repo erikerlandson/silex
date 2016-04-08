@@ -56,8 +56,10 @@ class RandomForestClusteringModel(self: RandomForestModel) extends Serializable 
       (names.applyOrElse(idx, defaultName), n)
     }
 
-  def rules(names: PartialFunction[Int, String]): Map[Double, Seq[Seq[Predicate]]] = {
-    val dtr = dti.map(_.rules(names))
+  def rules(
+    names: PartialFunction[Int, String],
+    catInfo: PartialFunction[Int, Int]): Map[Double, Seq[Seq[Predicate]]] = {
+    val dtr = dti.map(_.rules(names, catInfo))
     dtr.foldLeft(Map.empty[Double, Seq[Seq[Predicate]]]) { (m, x) =>
       x.keys.foldLeft(m) { (m, k) =>
         val s = m.getOrElse(k, Seq.empty[Seq[Predicate]])
@@ -75,4 +77,54 @@ class RandomForestClusteringModel(self: RandomForestModel) extends Serializable 
 object RandomForestClusteringModel {
   implicit def fromRFM(self: RandomForestModel): RandomForestClusteringModel =
     new RandomForestClusteringModel(self)
+}
+
+
+class test(spark: org.apache.spark.SparkContext) {
+  import org.apache.spark.sql.SQLContext
+  import org.apache.spark.mllib.tree.RandomForest
+  import org.apache.spark.mllib.util.MLUtils
+  import org.apache.spark.mllib.linalg.{DenseVector => DenseSparkVec}
+  import org.apache.spark.mllib.regression.LabeledPoint
+  import scala.util.Random
+
+  import org.apache.spark.rdd.RDD
+
+  val names = Vector("foo", "bar")
+  val catInfo = Map((1 -> 2))
+
+  val raw = Vector.fill(1000) { Array.fill(2) { Random.nextInt(2).toDouble } }
+
+  val x = new DenseSparkVec(Array(0.0, 1.0))
+
+  def test(sc: org.apache.spark.SparkContext) = {
+    val y = (x: Array[Double]) =>
+      if (x(0) > 0.0  &&  x(1) > 0.0) 1.0 else 0.0
+
+    val data = sc.parallelize(raw)
+    val trainData = data.map { x => LabeledPoint(y(x), new DenseSparkVec(x)) }
+
+    val maxBins = 2
+
+    val numClasses = 2
+
+    val featureSubsetStrategy = "auto"
+    val impurity = "gini"
+
+    val numTrees = 5
+    val maxDepth = 3
+
+    RandomForest.trainClassifier(
+      trainData,
+      numClasses,
+      catInfo,
+      numTrees,
+      featureSubsetStrategy,
+      impurity,
+      maxDepth,
+      maxBins,
+      73)
+  }
+
+  lazy val t = test(spark)
 }
