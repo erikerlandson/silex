@@ -35,6 +35,7 @@ import breeze.linalg.{
 import com.redhat.et.silex.feature.extractor.FeatureSeq
 
 object implicits {
+  // methods that will cover Breeze, FeatureSeq, and any other Seq subclass
   implicit class enrichSeqConversions(@transient seq: Seq[Double]) extends Serializable {
     def toSpark: SparkVector = {
       seq match {
@@ -55,5 +56,10 @@ object implicits {
     }
 
     def toLabeledPoint(lab: Double) = new LabeledPoint(lab, this.toSpark)
+  }
+
+  // methods that will cover Spark Vector
+  implicit class enrichSparkVecConversions(@transient sv: SparkVector) extends Serializable {
+    def toLabeledPoint(lab: Double) = new LabeledPoint(lab, sv)
   }
 }
