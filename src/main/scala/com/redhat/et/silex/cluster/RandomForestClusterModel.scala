@@ -25,6 +25,7 @@ import org.apache.spark.mllib.linalg.{
   DenseVector => DenseSparkVec
 }
 
+import com.redhat.et.silex.util.vectors.implicits._
 import ClusteringRandomForestModel._
 
 class RandomForestClusterModel[T](
@@ -33,10 +34,7 @@ class RandomForestClusterModel[T](
   val kMedoidsModel: KMedoidsModel[Vector[Int]]) extends Serializable {
 
   val predictor = (point: T) => {
-    // TODO: A utility that maps sequence subclasses to spark vectors with awareness of sparse
-    // formats like breeze, FeatureSeq, etc
-    val pv = new DenseSparkVec(extractor(point).toArray)
-    kMedoidsModel.predict(randomForestModel.predictLeafIds(pv))
+    kMedoidsModel.predict(randomForestModel.predictLeafIds(extractor(point).toSpark))
   }
 }
 
