@@ -43,6 +43,40 @@ case class RandomForestCluster[T](
   clusterThreads: Int,
   seed: Long) extends Serializable with Logging {
 
+  require(categoryInfo.valuesIterator.forall(_ > 0), "category counts must be > 0")
+  require(syntheticSS >= 0, "syntheticSS must be >= 0")
+  require(rfNumTrees > 0, "rfNumTrees must be > 0")
+  require(rfMaxDepth > 0, "rfMaxDepth must be > 0")
+  require(rfMaxBins > 1, "rfMaxBins must be > 1")
+  // clustering parameters checked by KMedoids class
+
+  def setExtractor(extractorNew: T => Seq[Double]) = this.copy(extractor = extractorNew)
+
+  def setCategoryInfo(categoryInfoNew: Map[Int, Int]) = this.copy(categoryInfo = categoryInfoNew)
+
+  def setSyntheticSS(syntheticSSNew: Int) = this.copy(syntheticSS = syntheticSSNew)
+
+  def setRfNumTrees(rfNumTreesNew: Int) = this.copy(rfNumTrees = rfNumTreesNew)
+
+  def setRfMaxDepth(rfMaxDepthNew: Int) = this.copy(rfMaxDepth = rfMaxDepthNew)
+
+  def setRfMaxBins(rfMaxBinsNew: Int) = this.copy(rfMaxBins = rfMaxBinsNew)
+
+  def setClusterK(clusterKNew: Int) = this.copy(clusterK = clusterKNew)
+
+  def setClusterMaxIter(clusterMaxIterNew: Int) = this.copy(clusterMaxIter = clusterMaxIterNew)
+
+  def setClusterEps(clusterEpsNew: Double) = this.copy(clusterEps = clusterEpsNew)
+
+  def setClusterFractionEps(clusterFractionEpsNew: Double) =
+    this.copy(clusterFractionEps = clusterFractionEpsNew)
+
+  def setClusterSS(clusterSSNew: Int) = this.copy(clusterSS = clusterSSNew)
+
+  def setClusterThreads(clusterThreadsNew: Int) = this.copy(clusterThreads = clusterThreadsNew)
+
+  def setSeed(seedNew: Long) = this.copy(seed = seedNew)
+
   def run(data: RDD[T]) = {
 
     scala.util.Random.setSeed(seed)
