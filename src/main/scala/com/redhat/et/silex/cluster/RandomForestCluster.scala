@@ -82,16 +82,22 @@ case class RandomForestCluster[T](
     scala.util.Random.setSeed(seed)
 
     val spark = data.sparkContext
+
+    logInfo(s"Extracting feature data...")
     val fvData = data.map(extractor)
+
+    logInfo(s"Assembling synthetic data from marginal distributions...")
     val sss = if (syntheticSS > 0) syntheticSS else fvData.count.toInt
     val synData = fvData.iidFeatureSeqRDD(sss)
 
+    logInfo(s"Assembling RF model training set...")
     val fvVec = fvData.map(_.toSpark)
     val synVec = synData.map(_.toSpark)
     val trainVec = new org.apache.spark.rdd.UnionRDD(spark, List(fvVec, synVec))
     val trainLab = new org.apache.spark.rdd.UnionRDD(spark,
       List(fvVec.map(_.toLabeledPoint(1.0)), synVec.map(_.toLabeledPoint(0.0))))
 
+    logInfo(s"Training RF model...")
     val rfModel = RandomForest.trainClassifier(
       trainLab,
       2,
@@ -112,8 +118,10 @@ case class RandomForestCluster[T](
       .setNumThreads(clusterThreads)
       .setSeed(scala.util.Random.nextInt)
 
+    logInfo(s"Clustering leaf id vectors...")
     val clusterModel = kMedoids.run(trainVec.map(rfModel.predictLeafIds))
 
+    logInfo(s"Completed RF clustering model")
     new RandomForestClusterModel(
       extractor,
       rfModel,
