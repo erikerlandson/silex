@@ -119,7 +119,7 @@ case class RandomForestCluster[T](
       .setSeed(scala.util.Random.nextInt)
 
     logInfo(s"Clustering leaf id vectors...")
-    val clusterModel = kMedoids.run(trainVec.map(rfModel.predictLeafIds))
+    val clusterModel = kMedoids.run(fvVec.map(rfModel.predictLeafIds))
 
     logInfo(s"Completed RF clustering model")
     new RandomForestClusterModel(
