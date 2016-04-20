@@ -33,8 +33,38 @@ class RandomForestClusterModel[T](
   val randomForestModel: RandomForestModel,
   val kMedoidsModel: KMedoidsModel[Vector[Int]]) extends Serializable {
 
-  val predictor = (point: T) => {
-    kMedoidsModel.predict(randomForestModel.predictLeafIds(extractor(point).toSpark))
+  def predict(point: T) = predictFromFv(extractor(point))
+
+  def predictFromFv(fv: Seq[Double]) =
+    kMedoidsModel.predict(randomForestModel.predictLeafIds(fv.toSpark))
+
+  def predictBy[O, V](obj: O)(f: O => (T, V)) = {
+    val (t, v) = f(obj)
+    val j = predict(t)
+    (j, v)
+  }
+
+  def predictWithDistance(point: T) = predictWithDistanceFromFv(extractor(point))
+
+  def predictWithDistanceFromFv(fv: Seq[Double]) =
+    kMedoidsModel.predictWithDistance(randomForestModel.predictLeafIds(fv.toSpark))
+
+  def predictWithDistanceBy[O, V](obj: O)(f: O => (T, V)) = {
+    val (t, v) = f(obj)
+    val (j, d) = predictWithDistance(t)
+    (j, d, v)
+  }
+
+  def predictFromFvBy[O, V](obj: O)(f: O => (Seq[Double], V)) = {
+    val (fv, v) = f(obj)
+    val j = predictFromFv(fv)
+    (j, v)
+  }
+
+  def predictWithDistanceFromFvBy[O, V](obj: O)(f: O => (Seq[Double], V)) = {
+    val (fv, v) = f(obj)
+    val (j, d) = predictWithDistanceFromFv(fv)
+    (j, d, v)
   }
 }
 
