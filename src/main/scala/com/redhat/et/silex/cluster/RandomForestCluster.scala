@@ -174,3 +174,38 @@ object RandomForestCluster {
     default.clusterThreads,
     default.seed)
 }
+
+class test(spark: org.apache.spark.SparkContext) extends Serializable {
+  import com.redhat.et.silex.feature.extractor._
+  import com.redhat.et.silex.rdd.paste.implicits._
+  import com.redhat.et.silex.rdd.split.implicits._
+
+  val dataDir = "/home/eje/analytics/rj_rpm_data"
+
+  val fields = spark.textFile(s"$dataDir/train.txt").map(_.split(" ").toVector)
+  val nodes = spark.textFile(s"$dataDir/nodesclean.txt").map { _.split(" ")(1) }
+  val ids = fields.paste(nodes)
+
+  val m = fields.first.length - 1
+  val ext = Extractor(m, (v: Vector[String]) => v.map(_.toDouble).tail :FeatureSeq)
+
+  val rfcModel = RandomForestCluster(ext)
+    .setClusterK(6)
+    .setSyntheticSS(250)
+    .run(fields)
+
+  val cid = ids.map(rfcModel.predictWithDistanceBy(_)(x => x))
+
+  val (clusters, outliers) = cid.splitFilter { case (_, dist, _) => dist <= 3 }
+
+  val clusterStr = clusters.map { case (j, _, n) => (j, n) }
+    .groupByKey
+    .collect
+    .map { case (j, nodes) => nodes.toSeq.sorted.mkString("\n") }
+    .mkString("\n\n")
+
+  val outlierStr = outliers.collect
+    .map { case (_, d,n) => (d, n) }
+    .toVector.sorted
+    .mkString("\n")
+}
