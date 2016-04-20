@@ -35,6 +35,9 @@ class KMedoidsModel[T](
   /** The model distance function: maps an element to its distance to the closest medoid */
   @transient lazy val distance = KMedoidsModel.distance(medoids, metric)
 
+  /** Returns index of closest medoid, paired with its distance to that medoid */
+  @transient lazy val predictorWithDistance = KMedoidsModel.predictorWithDistance(medoids, metric)
+
   /** The number of medoids in the model */
   def k = medoids.length
 
@@ -51,6 +54,20 @@ class KMedoidsModel[T](
     * @return An RDD whose rows are the corresponding indices of the closest medoids
     */
   def predict(points: RDD[T]): RDD[Int] = points.map(predictor)
+
+  def predictBy[O, V](obj: O)(f: O => (T, V)) = {
+    val (t, v) = f(obj)
+    val j = predictor(t)
+    (j, v)
+  }
+
+  def predictWithDistance(point: T) = predictorWithDistance(point)
+
+  def predictWithDistanceBy[O, V](obj: O)(f: O => (T, V)) = {
+    val (t, v) = f(obj)
+    val (j, d) = predictorWithDistance(t)
+    (j, d, v)
+  }
 
   /** Return the model cost with respect to the given data
     *
@@ -107,6 +124,31 @@ object KMedoidsModel {
         j += 1
       }
       jMin
+    }
+  }
+
+  /** Return a function that yields index of closest medoid, paired with distance to that medoid
+    *
+    * @param medoids A collection of elements representing clustering medoids
+    * @param metric The distance metric over the element space
+    * @return A function that maps an element to (index, distance)
+    */
+  def predictorWithDistance[T](medoids: Seq[T], metric: (T, T) => Double) = {
+    val med = medoids.toVector
+    val n = med.length
+    (point: T) => {
+      var mMin = Double.MaxValue  // distance from point to closest cluster medoid
+      var jMin = -1               // index of closest medoid
+      var j = 0
+      while (j < n) {
+        val m = metric(point, med(j))
+        if (m < mMin) {
+          mMin = m
+          jMin = j
+        }
+        j += 1
+      }
+      (jMin, mMin)
     }
   }
 
