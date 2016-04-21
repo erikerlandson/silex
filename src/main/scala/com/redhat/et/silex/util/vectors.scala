@@ -34,9 +34,15 @@ import breeze.linalg.{
 
 import com.redhat.et.silex.feature.extractor.FeatureSeq
 
+/** Implicit method enhancements for vector library interoperability */
 object implicits {
-  // methods that will cover Breeze, FeatureSeq, and any other Seq subclass
+  /** provides conversions from various Seq[Double] subclasses to Spark vectors */
   implicit class enrichSeqConversions(@transient seq: Seq[Double]) extends Serializable {
+
+    /** Convert a sequence of doubles to an equivalent Spark Vector.  Conversion is aware of
+      * whether underlying sequence types are sparse or dense.
+      * @return A new Spark Vector equivalent to the input sequence
+      */
     def toSpark: SparkVector = {
       seq match {
         case fs: FeatureSeq if (fs.density < 0.5) => new SparseSV(
@@ -55,11 +61,20 @@ object implicits {
       }
     }
 
+    /** Convert a sequence and a given label to an equivalent Spark LabeledPoint object.
+      * Conversion is aware of whether underlying sequence types are sparse or dense.
+      * @param lab A label to use for the LabeledPoint object
+      * @returns A new LabeledPoint object whose feature data is equivalent to the input sequence
+      */
     def toLabeledPoint(lab: Double) = new LabeledPoint(lab, this.toSpark)
   }
 
-  // methods that will cover Spark Vector
+  /** Conversions of Spark Vector object into other formats  */
   implicit class enrichSparkVecConversions(@transient sv: SparkVector) extends Serializable {
+    /** Use a given label to create a new LabeledPoint object from a Spark Vector
+      * @param lab A label to use for the LabeledPoint object
+      * @return A new LabeledPoint object using the input Spark Vector for feature data
+      */
     def toLabeledPoint(lab: Double) = new LabeledPoint(lab, sv)
   }
 }
