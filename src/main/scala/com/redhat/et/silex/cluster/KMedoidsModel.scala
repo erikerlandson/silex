@@ -55,14 +55,32 @@ class KMedoidsModel[T](
     */
   def predict(points: RDD[T]): RDD[Int] = points.map(predictor)
 
+  /** Extracts a data object and a tag value from another data structure, and returns the
+    * index of closest cluster, paired with the tag value
+    * @param obj An object containing a data point and an associated tag value
+    * @param f Function to extract data point and the tag value from 'obj'
+    * @return A pair value (j, v) where (j) is index of closest cluster and (v) is the associated
+    * tag value
+    */
   def predictBy[O, V](obj: O)(f: O => (T, V)) = {
     val (t, v) = f(obj)
     val j = predictor(t)
     (j, v)
   }
 
+  /** Returns the index of closest cluster, paired with corresponding distance
+    * @param point A data object
+    * @return Pair (j, d) with (j) the closest cluster index and (d) the corresponding distance
+    */
   def predictWithDistance(point: T) = predictorWithDistance(point)
 
+  /** Extracts a data object and a tag value from another data structure, and returns the
+    * index of closest cluster, with the corresponding distance and associated tag value
+    * @param obj An object containing a data point and an associated tag value
+    * @param f Function to extract data point and tag value from 'obj'
+    * @return A tuple (j, d, v) where (j) is index of closest cluster, (d) is corresponding
+    * distance, and (v) is the associated tag value
+    */
   def predictWithDistanceBy[O, V](obj: O)(f: O => (T, V)) = {
     val (t, v) = f(obj)
     val (j, d) = predictorWithDistance(t)
