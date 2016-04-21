@@ -106,39 +106,70 @@ package infra {
   }
 }
 
+/** Enhance a Spark DecisionTreeModel object with methods for Random Forest clustering */
 class ClusteringTreeModel(self: DecisionTreeModel) extends Serializable {
   import ClusteringTreeModel.Predicate
   import infra.ClusteringNode._
 
+  /** Evaluate a feature vector against a decision tree and return the id of the leaf node
+    * it "landed" at
+    * @param features The feature vector to evaluate
+    * @return The id of the decision tree leaf node the feature vector reached
+    */
   def predictLeafId(features: SparkVector): Int = self.topNode.predictLeafId(features)
 
+  /** Return an iterator over the nodes of the decision tree
+    * @return an iterator over the tree nodes, in breadth first order
+    */
   def nodeIterator: Iterator[Node] = self.topNode.nodeIterator
 
+  /** Traverse a Spark decision tree and convert each path from root to a leaf
+    * into a "rule" that is a sequence of individual predicates representing the decision made
+    * at each internal node.
+    * @param names a partial function that returns name of a feature given its index
+    * @param catInfo a partial function from feature index to number of categories.  If an index
+    * is not present then it is assumed to be numeric
+    * @return a map from leaf-node prediction values to a collection of all rules that will
+    * yield that value.
+    */
   def rules(
     names: PartialFunction[Int, String],
     catInfo: PartialFunction[Int, Int]): Map[Double, Seq[Seq[Predicate]]] =
     self.topNode.rules(names, catInfo)
 }
 
+/** Class definitions for ClusteringTreeModel methods */
 object ClusteringTreeModel {
+
+  /** Abstract trait for a predicate representing the decision at an internal node of a
+    * decision tree
+    */
   sealed trait Predicate extends Serializable {
+    /** Return the name of the feature being examined by the predicate */
     def feature: String
   }
+
+  
   object Predicate {
+    /** Represents the predicate (feature <= threshold) */
     case class LE(feature: String, threshold: Double) extends Predicate {
       override def toString = s"($feature <= $threshold)"
     }
+    /** Represents the predicate (feature > threshold) */
     case class GT(feature: String, threshold: Double) extends Predicate {
       override def toString = s"($feature > $threshold)"
     }
+    /** Represents the predicate (feature is element of category-list) */
     case class IN(feature: String, categories: Seq[Double]) extends Predicate {
       override def toString = s"""($feature in [${categories.mkString(",")}])"""
     }
+    /** Represents the predicate (feature is not an element of category-list) */
     case class NOTIN(feature: String, categories: Seq[Double]) extends Predicate {
       override def toString = s"""($feature not-in [${categories.mkString(",")}])"""
     }
   }
 
+  /** Returns a default feature name in the event that a feature index had no defined name */
   def defaultName(idx: Int): String = s"f_$idx"
 
   implicit def fromDTM(self: DecisionTreeModel): ClusteringTreeModel =
