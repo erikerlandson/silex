@@ -64,7 +64,7 @@ lazy val spark = project.dependsOn(silex)
       |import org.apache.spark.SparkContext
       |import org.apache.spark.SparkContext._
       |import org.apache.spark.rdd.RDD
-      |val app = new com.redhat.et.silex.app.ConsoleApp()
+      |val app = com.redhat.et.silex.app.sbtConsole.app
       |val spark = app.context
       |com.redhat.et.silex.util.logging.consoleLogWarn
     """.stripMargin,

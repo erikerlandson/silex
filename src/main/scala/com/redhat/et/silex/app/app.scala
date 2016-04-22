@@ -118,6 +118,11 @@ class ConsoleApp extends AppCommon {
   }
 }
 
+object sbtConsole {
+  lazy val app = new ConsoleApp()
+  lazy val spark = app.context
+}
+
 private [silex] class TestConsoleApp(val suppliedMaster: String = "local[2]") extends AppCommon { 
   override def master = suppliedMaster
   override def appName = "console"
