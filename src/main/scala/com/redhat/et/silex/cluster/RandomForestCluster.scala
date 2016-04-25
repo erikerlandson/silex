@@ -263,6 +263,9 @@ object RandomForestCluster {
     default.seed)
 }
 
+import java.io._
+import org.json4s.JsonDSL._
+import org.json4s.jackson.JsonMethods._
 
 class test extends Serializable {
   import com.redhat.et.silex.feature.extractor._
@@ -304,5 +307,83 @@ class test extends Serializable {
     .mkString("\n")
 }
 
-object demoSimple {
+class demo1 {
+  import com.redhat.et.silex.feature.extractor._
+  import com.redhat.et.silex.rdd.paste.implicits._
+  import com.redhat.et.silex.rdd.split.implicits._
+  import com.redhat.et.silex.util.buffered
+  import com.redhat.et.silex.sample.iid.implicits._
+  import ClusteringTreeModel._
+
+  val spark = com.redhat.et.silex.app.sbtConsole.spark
+
+  val data = Vector.fill(500) {
+    val center = if (scala.util.Random.nextInt(2) == 1)
+      Vector(-2.0, -2.0)
+    else
+      Vector(2.0, 2.0)
+    center.map(_ + scala.util.Random.nextGaussian()) :Seq[Double]
+  }
+
+  val synth = spark.parallelize(data, 1).iidFeatureSeqRDD(data.length).collect.toVector
+
+  val ext = Extractor(2, (v: Seq[Double]) => v : FeatureSeq)
+    .withNames("x1", "x2")
+
+  val rfcModel = RandomForestCluster((v: Seq[Double]) => v)
+    .setClusterK(2)
+    .setRfMaxDepth(2)
+    .run(spark.parallelize(data))
+
+  val rectangles = rfcModel.randomForestModel.rules(ext.names, ext.categoryInfo)(1.0).map(rect)
+
+  val pred = data.map(rfcModel.predictBy(_)(v => (v, v)))
+
+  def rect(rule: Seq[Predicate]) = {
+    if (rule.length != 2) throw new Exception("eek!")
+    val sr = rule.sortBy(_.feature)
+    (sr(0), sr(1)) match {
+      case (Predicate.LE("x1", t1), Predicate.LE("x2", t2)) => Seq(-10.0, -10.0, t1, t2)
+      case (Predicate.LE("x1", t1), Predicate.GT("x2", t2)) => Seq(-10.0, t2, t1, 10.0)
+      case (Predicate.GT("x1", t1), Predicate.LE("x2", t2)) => Seq(t1, -10.0, 10.0, t2)
+      case (Predicate.GT("x1", t1), Predicate.GT("x2", t2)) => Seq(t1, t2, 10.0, 10.0)
+      case (p1, p2) => throw new Exception(s"($p1, $p2)")
+    }
+  }
+
+  def dumpdata(fname: String) {
+    val dd = Map(
+      ("x0" -> synth.map(_(0))),
+      ("y0" -> synth.map(_(1))),
+      ("x1" -> data.map(_(0))),
+      ("y1" -> data.map(_(1)))
+    )
+    val json = dd
+    val out = new PrintWriter(new File(fname))
+    out.println(pretty(render(json)))
+    out.close()    
+  }
+
+  def dumprect(fname: String) {
+    val dd = Map(
+      ("rect" -> rectangles)
+    )
+    val json = dd
+    val out = new PrintWriter(new File(fname))
+    out.println(pretty(render(json)))
+    out.close()    
+  }
+
+  def dumppred(fname: String) {
+    val dd = Map(
+      ("x0" -> pred.filter { case (j, _) => j == 0 }.map { case (_, v) => v(0) }),
+      ("y0" -> pred.filter { case (j, _) => j == 0 }.map { case (_, v) => v(1) }),
+      ("x1" -> pred.filter { case (j, _) => j == 1 }.map { case (_, v) => v(0) }),
+      ("y1" -> pred.filter { case (j, _) => j == 1 }.map { case (_, v) => v(1) })
+    )
+    val json = dd
+    val out = new PrintWriter(new File(fname))
+    out.println(pretty(render(json)))
+    out.close()    
+  }
 }
