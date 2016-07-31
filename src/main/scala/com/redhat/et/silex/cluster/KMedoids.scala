@@ -316,7 +316,7 @@ case class KMedoids[T](
     }
 
     val ht = hyp.map { case (model, cost) => (model.length, cost) }
-    logInfo(s"""hypotheses=\n${ht.mkString("\n")}""")
+    logWarning(s"""hypotheses=\n${ht.mkString("\n")}""")
 
     // Identify the clustring model with the minimum MDL cost
     val (best, bestCost) = hyp.minBy { case (_, cost) => cost }
@@ -623,5 +623,47 @@ object KMedoids extends Logging {
       val dist = new GammaDistribution(kB, thetaB)
       ((x: Double) => dist.density(x), 2)
     }
+  }
+}
+
+object KMedoidsDemo {
+  import java.io._
+
+  import org.json4s.JsonDSL._
+  import org.json4s.jackson.JsonMethods._
+
+  def generateClusters(
+    centers: Seq[Seq[Double]],
+    n: Int,
+    seed: Long = scala.util.Random.nextLong): Seq[Vector[Double]] = {
+
+    val rng = new scala.util.Random(seed)
+    val k = centers.length
+    (0 until n).toSeq.map { t =>
+      centers(t % k).map(_ + rng.nextGaussian()).toVector
+    }
+  }
+
+  val vectorAbs = (x: Vector[Double], y: Vector[Double]) => {
+    val n = x.length
+    var j = 0
+    var s = 0.0
+    while (j < n) {
+      s += math.abs(x(j) - y(j))
+      j += 1
+    }
+    s
+  }
+
+  def writeJSON(data: Seq[Vector[Double]], model: KMedoidsModel[Vector[Double]], fname: String) {
+    val json =
+      ( "xmedoids" -> model.medoids.map(_(0)) ) ~
+      ( "ymedoids" -> model.medoids.map(_(1)) ) ~
+      ( "xdata" -> data.map(_(0)) ) ~
+      ( "ydata" -> data.map(_(1)) ) ~
+      ( "ids" -> data.map(model.predictor))
+    val out = new PrintWriter(new File(fname))
+    out.println(pretty(render(json)))
+    out.close()
   }
 }
