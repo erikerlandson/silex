@@ -37,5 +37,10 @@ object demo {
     ("/usr/bin/scatter" #< inputStream)!
   }
 
-  
+  def scatter[N1, N2](xdata: Seq[N1], ydata: Seq[N2])(implicit
+      num1: Numeric[N1], num2: Numeric[N2]): Unit = {
+    require(xdata.length == ydata.length)
+    scatter(xdata.zip(ydata))
+  }
+
 }
