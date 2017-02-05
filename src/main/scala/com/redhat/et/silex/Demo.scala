@@ -27,13 +27,18 @@ object demo {
     override def toString = "<text-plot>"
   }
 
+  def padTo(str: String, w: Int): String = {
+    if (str.length >= w) str else str + (" " * (w - str.length))
+  }
+
   def show(tp: TextPlot): Unit = println(tp.txt.mkString("\n"))
   def show(tp1: TextPlot, tp2: TextPlot): Unit = {
-    val jp = tp1.txt.zip(tp2.txt).map { case(l1, l2) => s"$l1  $l2" }
+    val wmax = tp1.txt.map(_.length).max
+    val jp = tp1.txt.map(padTo(_, wmax)).zip(tp2.txt).map { case(l1, l2) => s"$l1  $l2" }
     println(jp.mkString("\n"))
   }
 
-  def histogram[N](data: Seq[N], cumulative: Boolean = false, normalized: Boolean = false)(implicit num: Numeric[N]): TextPlot = {
+  def histogram[N](data: Seq[N], cumulative: Boolean = false, normalized: Boolean = false, xmax: Option[Double]=None, xmin: Option[Double]=None, ymax: Option[Double]=None, ymin: Option[Double]=None, title: Option[String] = None)(implicit num: Numeric[N]): TextPlot = {
     require(data.length > 0)
     val dd = data.map(num.toDouble(_))
     val histstyle = (cumulative, normalized) match {
@@ -51,7 +56,13 @@ object demo {
     val binsize = (dmax-dmin)/bsden
     val inputStream: java.io.InputStream =
       new ByteArrayInputStream(dd.mkString("\n").getBytes("UTF-8"))
-    val txt = (List("/usr/local/bin/feedgnuplot", "--unset", "grid", "--histogram", "0", "--histstyle", s"$histstyle", "--binwidth", s"$binsize", "--ymin", "0", "--terminal", "dumb 70,35", "--exit") #< inputStream).lines_!.toVector
+    var cmd = List("/usr/local/bin/feedgnuplot", "--unset", "grid", "--histogram", "0", "--histstyle", s"$histstyle", "--binwidth", s"$binsize", "--ymin", "0", "--terminal", "dumb 70,35", "--exit")
+    xmin.foreach { x => cmd = cmd ++ List("--xmin", s"$x") }
+    xmax.foreach { x => cmd = cmd ++ List("--xmax", s"$x") }
+    ymin.foreach { y => cmd = cmd ++ List("--ymin", s"$y") }
+    ymax.foreach { y => cmd = cmd ++ List("--ymax", s"$y") }
+    title.foreach { t => cmd = cmd ++ List("--title", s"$t") }
+    val txt = (cmd #< inputStream).lines_!.toVector
     TextPlot(txt)
   }
 
@@ -71,24 +82,28 @@ object demo {
     scatter(xdata.zip(ydata))
   }
 
-  def plot[N1, N2](data: Seq[(N1, N2)])(implicit
+  def plot[N1, N2](data: Seq[(N1, N2)], xmax: Option[Double]=None, xmin: Option[Double]=None, title: Option[String] = None)(implicit
       num1: Numeric[N1], num2: Numeric[N2]): TextPlot = {
     val dd = data.map { case (d1, d2) => ((num1.toDouble(d1), num2.toDouble(d2))) }
     val dc = dd.map { case (d1, d2) => s"$d1, $d2" }
     val inputStream: java.io.InputStream =
       new ByteArrayInputStream((dc.mkString("\n") + "\n").getBytes("UTF-8"))
-    val txt = (List("/usr/local/bin/feedgnuplot", "--lines", "--terminal", "dumb 70,35", "--unset", "grid", "--domain", "--exit") #< inputStream).lines_!.toVector
+    var cmd = List("/usr/local/bin/feedgnuplot", "--lines", "--terminal", "dumb 70,35", "--unset", "grid", "--domain", "--style", "0", "linetype 2", "--exit")
+    xmin.foreach { x => cmd = cmd ++ List("--xmin", s"$x") }
+    xmax.foreach { x => cmd = cmd ++ List("--xmax", s"$x") }
+    title.foreach { t => cmd = cmd ++ List("--title", s"$t") }
+    val txt = (cmd #< inputStream).lines_!.toVector
     TextPlot(txt)
   }
 
-  def tdPlotPDF(td: TDigest, res: Int = 20): TextPlot = {
+  def tdPlotPDF(td: TDigest, res: Int = 20, xmax: Option[Double]=None, xmin: Option[Double]=None, title: Option[String] = None): TextPlot = {
     val f = pdfFunction(td, res)
-    plot((f.xMin to f.xMax by 0.1).map { x => (x, f(x)) })
+    plot((f.xMin to f.xMax by 0.1).map { x => (x, f(x)) }, xmin=xmin, xmax=xmax, title=title)
   }
 
-  def tdPlotCDF(td: TDigest): TextPlot = {
-    val (xmin, xmax) = (td.cdfInverse(0), td.cdfInverse(1))
-    plot((xmin to xmax by 0.1).map { x => (x, td.cdf(x)) })
+  def tdPlotCDF(td: TDigest, xmax: Option[Double]=None, xmin: Option[Double]=None, title: Option[String] = None): TextPlot = {
+    val (xmin0, xmax0) = (td.cdfInverse(0), td.cdfInverse(1))
+    plot((xmin0 to xmax0 by 0.1).map { x => (x, td.cdf(x)) }, xmin=xmin, xmax=xmax, title=title)
   }
 
   def gaussian_mixture[N1, N2](n: Int, centers: (N1, N2)*)(implicit
@@ -121,5 +136,11 @@ object demo {
     }
     val pdf = (x: Double) => xint.find(x <= _._1).map(_._2).getOrElse(0.0)
     PDF(pdf, xmin, xmax)
+  }
+
+  def load_latency_data(n: Int = 1000000): Seq[Double] = {
+    import org.apache.commons.math3.distribution.GammaDistribution
+    val dist = new GammaDistribution(2.0, 0.2)
+    Vector.fill(n) { dist.sample() }
   }
 }
