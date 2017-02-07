@@ -21,6 +21,8 @@ object demo {
   import java.io.ByteArrayInputStream
   import scala.sys.process._
 
+  import com.redhat.et.silex.util.OptionalArg
+
   import org.isarnproject.sketches.TDigest
 
   case class TextPlot(txt: Seq[String]) {
@@ -38,7 +40,7 @@ object demo {
     println(jp.mkString("\n"))
   }
 
-  def histogram[N](data: Seq[N], cumulative: Boolean = false, normalized: Boolean = false, xmax: Option[Double]=None, xmin: Option[Double]=None, ymax: Option[Double]=None, ymin: Option[Double]=None, title: Option[String] = None)(implicit num: Numeric[N]): TextPlot = {
+  def histogram[N](data: Seq[N], cumulative: Boolean = false, normalized: Boolean = false, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, ymax: OptionalArg[Double]=None, ymin: OptionalArg[Double]=None, title: OptionalArg[String] = None)(implicit num: Numeric[N]): TextPlot = {
     require(data.length > 0)
     val dd = data.map(num.toDouble(_))
     val histstyle = (cumulative, normalized) match {
@@ -82,7 +84,7 @@ object demo {
     scatter(xdata.zip(ydata))
   }
 
-  def plot[N1, N2](data: Seq[(N1, N2)], xmax: Option[Double]=None, xmin: Option[Double]=None, title: Option[String] = None)(implicit
+  def plot[N1, N2](data: Seq[(N1, N2)], xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None)(implicit
       num1: Numeric[N1], num2: Numeric[N2]): TextPlot = {
     val dd = data.map { case (d1, d2) => ((num1.toDouble(d1), num2.toDouble(d2))) }
     val dc = dd.map { case (d1, d2) => s"$d1, $d2" }
@@ -96,12 +98,12 @@ object demo {
     TextPlot(txt)
   }
 
-  def tdPlotPDF(td: TDigest, res: Int = 20, xmax: Option[Double]=None, xmin: Option[Double]=None, title: Option[String] = None): TextPlot = {
+  def tdPlotPDF(td: TDigest, res: Int = 20, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None): TextPlot = {
     val f = pdfFunction(td, res)
     plot((f.xMin to f.xMax by 0.1).map { x => (x, f(x)) }, xmin=xmin, xmax=xmax, title=title)
   }
 
-  def tdPlotCDF(td: TDigest, xmax: Option[Double]=None, xmin: Option[Double]=None, title: Option[String] = None): TextPlot = {
+  def tdPlotCDF(td: TDigest, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None): TextPlot = {
     val (xmin0, xmax0) = (td.cdfInverse(0), td.cdfInverse(1))
     plot((xmin0 to xmax0 by 0.1).map { x => (x, td.cdf(x)) }, xmin=xmin, xmax=xmax, title=title)
   }
