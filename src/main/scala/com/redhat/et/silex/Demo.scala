@@ -1,4 +1,4 @@
-/*
+ /*
  * This file is part of the "silex" library of helpers for Apache Spark.
  *
  * Copyright (c) 2016 Red Hat, Inc.
@@ -40,7 +40,7 @@ object demo {
     println(jp.mkString("\n"))
   }
 
-  def histogram[N](data: Seq[N], cumulative: Boolean = false, normalized: Boolean = false, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, ymax: OptionalArg[Double]=None, ymin: OptionalArg[Double]=None, title: OptionalArg[String] = None)(implicit num: Numeric[N]): TextPlot = {
+  def histogram[N](data: Seq[N], cumulative: Boolean = false, normalized: Boolean = false, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, ymax: OptionalArg[Double]=None, ymin: OptionalArg[Double]=None, title: OptionalArg[String] = None, size: OptionalArg[Int]=Some(30))(implicit num: Numeric[N]): TextPlot = {
     require(data.length > 0)
     val dd = data.map(num.toDouble(_))
     val histstyle = (cumulative, normalized) match {
@@ -58,12 +58,15 @@ object demo {
     val binsize = (dmax-dmin)/bsden
     val inputStream: java.io.InputStream =
       new ByteArrayInputStream(dd.mkString("\n").getBytes("UTF-8"))
-    var cmd = List("/usr/local/bin/feedgnuplot", "--unset", "grid", "--histogram", "0", "--histstyle", s"$histstyle", "--binwidth", s"$binsize", "--ymin", "0", "--terminal", "dumb 70,35", "--exit")
+    var cmd = List("/usr/local/bin/feedgnuplot", "--unset", "grid", "--histogram", "0", "--histstyle", s"$histstyle", "--binwidth", s"$binsize", "--ymin", "0", "--exit")
     xmin.foreach { x => cmd = cmd ++ List("--xmin", s"$x") }
     xmax.foreach { x => cmd = cmd ++ List("--xmax", s"$x") }
     ymin.foreach { y => cmd = cmd ++ List("--ymin", s"$y") }
     ymax.foreach { y => cmd = cmd ++ List("--ymax", s"$y") }
     title.foreach { t => cmd = cmd ++ List("--title", s"$t") }
+    var sz = 30
+    size.foreach { s => sz = s }
+    cmd = cmd ++ List("--terminal", s"dumb ${2*sz},$sz")
     val txt = (cmd #< inputStream).lines_!.toVector
     TextPlot(txt)
   }
@@ -84,28 +87,31 @@ object demo {
     scatter(xdata.zip(ydata))
   }
 
-  def plot[N1, N2](data: Seq[(N1, N2)], xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None)(implicit
+  def plot[N1, N2](data: Seq[(N1, N2)], xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None, size: OptionalArg[Int]=None)(implicit
       num1: Numeric[N1], num2: Numeric[N2]): TextPlot = {
     val dd = data.map { case (d1, d2) => ((num1.toDouble(d1), num2.toDouble(d2))) }
     val dc = dd.map { case (d1, d2) => s"$d1, $d2" }
     val inputStream: java.io.InputStream =
       new ByteArrayInputStream((dc.mkString("\n") + "\n").getBytes("UTF-8"))
-    var cmd = List("/usr/local/bin/feedgnuplot", "--lines", "--terminal", "dumb 70,35", "--unset", "grid", "--domain", "--style", "0", "linetype 2", "--exit")
+    var cmd = List("/usr/local/bin/feedgnuplot", "--lines", "--unset", "grid", "--domain", "--style", "0", "linetype 2", "--exit")
     xmin.foreach { x => cmd = cmd ++ List("--xmin", s"$x") }
     xmax.foreach { x => cmd = cmd ++ List("--xmax", s"$x") }
     title.foreach { t => cmd = cmd ++ List("--title", s"$t") }
+    var sz = 30
+    size.foreach { s => sz = s }
+    cmd = cmd ++ List("--terminal", s"dumb ${2*sz},$sz")
     val txt = (cmd #< inputStream).lines_!.toVector
     TextPlot(txt)
   }
 
-  def tdPlotPDF(td: TDigest, res: Int = 20, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None): TextPlot = {
+  def tdPlotPDF(td: TDigest, res: Int = 20, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None, size: OptionalArg[Int]=Some(30)): TextPlot = {
     val f = pdfFunction(td, res)
-    plot((f.xMin to f.xMax by 0.1).map { x => (x, f(x)) }, xmin=xmin, xmax=xmax, title=title)
+    plot((f.xMin to f.xMax by 0.1).map { x => (x, f(x)) }, xmin=xmin, xmax=xmax, title=title, size=size)
   }
 
-  def tdPlotCDF(td: TDigest, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None): TextPlot = {
+  def tdPlotCDF(td: TDigest, xmax: OptionalArg[Double]=None, xmin: OptionalArg[Double]=None, title: OptionalArg[String] = None, size: OptionalArg[Int]=Some(30)): TextPlot = {
     val (xmin0, xmax0) = (td.cdfInverse(0), td.cdfInverse(1))
-    plot((xmin0 to xmax0 by 0.1).map { x => (x, td.cdf(x)) }, xmin=xmin, xmax=xmax, title=title)
+    plot((xmin0 to xmax0 by 0.1).map { x => (x, td.cdf(x)) }, xmin=xmin, xmax=xmax, title=title, size=size)
   }
 
   def gaussian_mixture[N1, N2](n: Int, centers: (N1, N2)*)(implicit
