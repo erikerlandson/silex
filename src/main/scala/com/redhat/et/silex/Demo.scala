@@ -146,9 +146,10 @@ object demo {
     PDF(pdf, xmin, xmax)
   }
 
-  def load_latency_data(n: Int = 1000000): Seq[Double] = {
+  def load_latency_data(spark: org.apache.spark.SparkContext, n: Int = 1000000) = {
     import org.apache.commons.math3.distribution.GammaDistribution
     val dist = new GammaDistribution(2.0, 0.2)
-    Vector.fill(n) { dist.sample() }
+    val raw = Vector.fill(n) { dist.sample() }
+    spark.parallelize(raw, 10)
   }
 }
