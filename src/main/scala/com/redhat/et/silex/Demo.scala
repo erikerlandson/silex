@@ -152,4 +152,68 @@ object demo {
     val raw = Vector.fill(n) { dist.sample() }
     spark.parallelize(raw, 10)
   }
+
+  trait TLike[T <: TLike[T]] { self: T =>
+    def x: Int
+    def y: Int
+    protected def construct(x: Int, y: Int): T
+    private def copyTrait(x: Int = self.x, y: Int = self.y): T = construct(x, y)
+    def xSet(x: Int): T = copyTrait(x = x)
+    def ySet(y: Int): T = copyTrait(y = y)
+  }
+
+  case class T1(x: Int, y: Int, a: Int) extends TLike[T1] {
+    def construct(x: Int, y: Int) = T1(x, y, a)
+  }
+  case class T2(x: Int, y: Int, b: Int) extends TLike[T2] {
+    def construct(x: Int, y: Int) = T2(x, y, b)
+  }
+}
+
+object gnuplot {
+  import cats.free.Free
+  import cats.Functor
+
+  val istrm = new java.io.PipedInputStream()
+  val ostream = new java.io.PipedOutputStream(istrm)
+
+  sealed trait OptionOutput[+Next]
+  object OptionOutput {
+    case class End() extends OptionOutput[Nothing]
+    case class Opt[A, Next](opt: Option[A], onValue: A => String, onNone: () => String, next: Next) extends OptionOutput[Next]
+
+    implicit val optionOutputFunctor: Functor[OptionOutput] = new Functor[OptionOutput] {
+      def map[A, B](a: OptionOutput[A])(f: A => B): OptionOutput[B] = a match {
+        case Opt(opt, onv, ond, next) => Opt(opt, onv, ond, f(next))
+        case End() => End()
+      }
+    }
+
+    def end: Free[OptionOutput, Unit] = Free.liftF[OptionOutput, Unit](End())
+    def opt[A](o: Option[A])(onv: A => String)(ond: => String): Free[OptionOutput, Unit] =
+      Free.liftF[OptionOutput, Unit](Opt(o, onv, () => ond, ()))
+
+    def run[Next](prog: Free[OptionOutput, Next]): Unit =
+      prog.fold({ _: Next => () }, {
+        case Opt(opt, onv, ond, next) => {
+          val str = opt.fold(ond())(onv(_))
+          print(s"$str")
+          run(next)
+        }
+        case End() => ()
+      })
+  }
+
+  val opt1 = Option(5)
+  //val opt2 = Option("foo")
+  val opt2 = None :Option[String]
+  
+  val prog = for {
+    _ <- OptionOutput.opt(opt1){ v => s"$v\n" }{ "!!!\n" };
+    _ <- OptionOutput.opt(opt2){ v => s"$v\n" }{ "!!!\n" };
+    _ <- OptionOutput.end
+  } yield ()
+
+  case class Session() {
+  }
 }

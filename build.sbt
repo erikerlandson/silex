@@ -19,6 +19,7 @@ def commonSettings = Seq(
     "org.joda" % "joda-convert" % "1.7",
     "org.apache.commons" % "commons-math3" % "3.6",
     "org.isarnproject" %% "isarn-sketches" % "0.0.2",
+    "org.typelevel" %% "cats-free" % "0.9.0",
     "org.scalatest" %% "scalatest" % "2.2.4" % Test,
     "org.slf4j" % "slf4j-nop" % "1.7.6" % Test,
     "org.json4s" %% "json4s-jackson" % "3.2.10" % "provided",
