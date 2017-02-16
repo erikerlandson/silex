@@ -179,39 +179,42 @@ object gnuplot {
 
   sealed trait OptionOutput[+Next]
   object OptionOutput {
-    case class End() extends OptionOutput[Nothing]
-    case class Opt[A, Next](opt: Option[A], onValue: A => String, onNone: () => String, next: Next) extends OptionOutput[Next]
+    case class End[U](e: () => U) extends OptionOutput[Nothing]
+    case class Opt[A, U1, U2, Next](opt: Option[A], onValue: A => U1, onNone: () => U2, next: Next) extends OptionOutput[Next]
 
     implicit val optionOutputFunctor: Functor[OptionOutput] = new Functor[OptionOutput] {
       def map[A, B](a: OptionOutput[A])(f: A => B): OptionOutput[B] = a match {
         case Opt(opt, onv, ond, next) => Opt(opt, onv, ond, f(next))
-        case End() => End()
+        case End(e) => End(e)
       }
     }
 
-    def end: Free[OptionOutput, Unit] = Free.liftF[OptionOutput, Unit](End())
-    def opt[A](o: Option[A])(onv: A => String)(ond: => String): Free[OptionOutput, Unit] =
+    def end[U](e: => U = {()}): Free[OptionOutput, Unit] = Free.liftF[OptionOutput, Unit](End(() => e))
+    def opt[A, U1, U2](o: Option[A])(onv: A => U1, ond: => U2 = {()}): Free[OptionOutput, Unit] =
       Free.liftF[OptionOutput, Unit](Opt(o, onv, () => ond, ()))
 
     def run[Next](prog: Free[OptionOutput, Next]): Unit =
       prog.fold({ _: Next => () }, {
         case Opt(opt, onv, ond, next) => {
-          val str = opt.fold(ond())(onv(_))
-          print(s"$str")
+          opt.fold(ond())(onv(_))
           run(next)
         }
-        case End() => ()
+        case End(e) => {
+          e()
+          ()
+        }
       })
   }
 
   val opt1 = Option(5)
   //val opt2 = Option("foo")
   val opt2 = None :Option[String]
-  
+
+  def dump[A](v: A) = println(v.toString)
   val prog = for {
-    _ <- OptionOutput.opt(opt1){ v => s"$v\n" }{ "!!!\n" };
-    _ <- OptionOutput.opt(opt2){ v => s"$v\n" }{ "!!!\n" };
-    _ <- OptionOutput.end
+    _ <- OptionOutput.opt(opt1)(dump(_), println("!!!"));
+    _ <- OptionOutput.opt(opt2)(dump(_), println("!!!"));
+    _ <- OptionOutput.end(println("end!"))
   } yield ()
 
   case class Session() {
